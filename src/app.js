@@ -4,6 +4,15 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
+const preferenceRoutes = require('./routes/preferenceRoutes');
+const moodRoutes = require('./routes/moodRoutes');
+const movieRoutes = require('./routes/movieRoutes');
+const adminMovieRoutes = require('./routes/adminMovieRoutes');
+const historyRoutes = require('./routes/historyRoutes');
+const ratingRoutes = require('./routes/ratingRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
+const watchlistRoutes = require('./routes/watchlistRoutes');
+const recommendationRoutes = require('./routes/recommendationRoutes');
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +35,15 @@ app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/preferences', preferenceRoutes);
+app.use('/api/mood', moodRoutes);
+app.use('/api/movies', movieRoutes);
+app.use('/api/admin/movies', adminMovieRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/ratings', ratingRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/watchlist', watchlistRoutes);
+app.use('/api/recommendations', recommendationRoutes);
 
 // Health check route
 app.get('/', (req, res) => {
