@@ -54,7 +54,27 @@ const getHistory = async (req, res, next) => {
   }
 };
 
+const deleteHistoryEntry = async (req, res, next) => {
+  try {
+    const historyEntry = await WatchHistory.findById(req.params.id);
+    if (!historyEntry) {
+      return res.status(404).json({ message: 'History entry not found' });
+    }
+
+    // Ownership check
+    if (historyEntry.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete this history entry' });
+    }
+
+    await historyEntry.deleteOne();
+    res.status(200).json({ message: 'History entry removed successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   addHistoryEntry,
   getHistory,
+  deleteHistoryEntry,
 };
