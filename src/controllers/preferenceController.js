@@ -1,142 +1,86 @@
-const Preference = require('../models/Preference');
+const asyncHandler = require('../utils/asyncHandler');
+const AppError = require('../utils/AppError');
+const {
+  createPreference,
+  getPreferenceByUserId,
+  updatePreference,
+} = require('../services/preferenceService');
 
-/**
- * @desc    Create user preferences
- * @route   POST /api/preferences
- * @access  Private
- */
-const createPreferences = async (req, res, next) => {
-  try {
-    // Check if user already has preferences
-    const existingPrefs = await Preference.findOne({ user: req.user._id });
-    if (existingPrefs) {
-      return res.status(400).json({
-        message: 'Preferences already exist for this user. Use PUT /api/preferences to update.',
-      });
-    }
 
-    const {
-      genrePreferences,
-      favoriteActors,
-      dislikedGenres,
-      preferredLanguage,
-      ageViewingPreference,
-    } = req.body;
+// @desc    Create genre preferences for the authenticated user
+// @route   POST /api/preferences
+// @access  Private (JWT required)
+const createPreferenceRecord = asyncHandler(async (req, res) => {
+  const preference = await createPreference({
+    userId: req.user._id,
+    body: req.body,
+  });
 
-    // Validation (ensure arrays are arrays)
-    if (genrePreferences && !Array.isArray(genrePreferences)) {
-      return res.status(400).json({ message: 'genrePreferences must be an array' });
-    }
-    if (favoriteActors && !Array.isArray(favoriteActors)) {
-      return res.status(400).json({ message: 'favoriteActors must be an array' });
-    }
-    if (dislikedGenres && !Array.isArray(dislikedGenres)) {
-      return res.status(400).json({ message: 'dislikedGenres must be an array' });
-    }
+  res.status(201).json({
+    success: true,
+    message: 'Genre preferences saved successfully.',
+    data: { preference: preference.toSummary() },
+  });
+});
 
-    const preference = await Preference.create({
-      user: req.user._id,
-      genrePreferences: genrePreferences || [],
-      favoriteActors: favoriteActors || [],
-      dislikedGenres: dislikedGenres || [],
-      preferredLanguage: preferredLanguage || '',
-      ageViewingPreference: ageViewingPreference || 'All',
-    });
 
-    res.status(201).json(preference);
-  } catch (error) {
-    next(error);
+// @desc    Get a user's genre preferences
+// @route   GET /api/preferences/:userId
+// @access  Private (JWT required — own record or admin)
+
+const getPreferenceRecord = asyncHandler(async (req, res, next) => {
+  // Users can only read their own preferences; admins can read any
+  if (
+    req.user.role !== 'admin' &&
+    req.user._id.toString() !== req.params.userId
+  ) {
+    return next(
+      new AppError('You are not authorised to view these preferences.', 403)
+    );
   }
-};
 
-/**
- * @desc    Get user preferences
- * @route   GET /api/preferences
- * @access  Private
- */
-const getPreferences = async (req, res, next) => {
-  try {
-    const preference = await Preference.findOne({ user: req.user._id });
-    if (!preference) {
-      return res.status(404).json({ message: 'Preferences not found' });
-    }
-    res.status(200).json(preference);
-  } catch (error) {
-    next(error);
+  const preference = await getPreferenceByUserId(req.params.userId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Genre preferences retrieved successfully.',
+    data: { preference: preference.toSummary() },
+  });
+});
+
+// @desc    Update a user's genre preferences (partial update)
+// @route   PUT /api/preferences/:userId
+// @access  Private (JWT required — own record or admin)
+//
+// Supports two update modes (see preferenceService for details):
+//   Default  — full replace of favoriteGenres / dislikedGenres arrays
+//   PatchMode— set patchMode:true and use addFavorites / removeFavorites etc.
+
+const updatePreferenceRecord = asyncHandler(async (req, res, next) => {
+  // Users can only update their own preferences; admins can update any
+  if (
+    req.user.role !== 'admin' &&
+    req.user._id.toString() !== req.params.userId
+  ) {
+    return next(
+      new AppError('You are not authorised to update these preferences.', 403)
+    );
   }
-};
 
-/**
- * @desc    Update user preferences
- * @route   PUT /api/preferences
- * @access  Private
- */
-const updatePreferences = async (req, res, next) => {
-  try {
-    const preference = await Preference.findOne({ user: req.user._id });
-    if (!preference) {
-      return res.status(404).json({ message: 'Preferences not found' });
-    }
+  const preference = await updatePreference({
+    userId: req.params.userId,
+    body: req.body,
+  });
 
-    const {
-      genrePreferences,
-      favoriteActors,
-      dislikedGenres,
-      preferredLanguage,
-      ageViewingPreference,
-    } = req.body;
-
-    // Validation
-    if (genrePreferences && !Array.isArray(genrePreferences)) {
-      return res.status(400).json({ message: 'genrePreferences must be an array' });
-    }
-    if (favoriteActors && !Array.isArray(favoriteActors)) {
-      return res.status(400).json({ message: 'favoriteActors must be an array' });
-    }
-    if (dislikedGenres && !Array.isArray(dislikedGenres)) {
-      return res.status(400).json({ message: 'dislikedGenres must be an array' });
-    }
-
-    if (genrePreferences) preference.genrePreferences = genrePreferences;
-    if (favoriteActors) preference.favoriteActors = favoriteActors;
-    if (dislikedGenres) preference.dislikedGenres = dislikedGenres;
-    if (preferredLanguage !== undefined) preference.preferredLanguage = preferredLanguage;
-    if (ageViewingPreference !== undefined) preference.ageViewingPreference = ageViewingPreference;
-
-    const updatedPreference = await preference.save();
-    res.status(200).json(updatedPreference);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Delete user preferences by ID
- * @route   DELETE /api/preferences/:id
- * @access  Private
- */
-const deletePreferences = async (req, res, next) => {
-  try {
-    const preference = await Preference.findById(req.params.id);
-    if (!preference) {
-      return res.status(404).json({ message: 'Preferences not found' });
-    }
-
-    // Authorization check
-    if (preference.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to delete these preferences' });
-    }
-
-    await preference.deleteOne();
-    res.status(200).json({ message: 'Preferences deleted successfully' });
-  } catch (error) {
-    next(error);
-  }
-};
+  res.status(200).json({
+    success: true,
+    message: 'Genre preferences updated successfully.',
+    data: { preference: preference.toSummary() },
+  });
+});
 
 module.exports = {
-  createPreferences,
-  getPreferences,
-  updatePreferences,
-  deletePreferences,
+  createPreferenceRecord,
+  getPreferenceRecord,
+  updatePreferenceRecord,
 };
