@@ -1,43 +1,50 @@
 const express = require('express');
 const { body, param } = require('express-validator');
+
 const {
   createPreferenceRecord,
   getPreferenceRecord,
   updatePreferenceRecord,
 } = require('../controllers/preferenceController');
+
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
-const { SUPPORTED_GENRES, SUPPORTED_LANGUAGES } = require('../models/Preference');
+
+const {
+  SUPPORTED_GENRES,
+  SUPPORTED_LANGUAGES,
+} = require('../models/Preference');
 
 const router = express.Router();
 
-// Shared validation helpers
-
+// Check that the user ID provided in the URL is a valid MongoDB ID
 const userIdParam = param('userId')
   .isMongoId()
   .withMessage('userId must be a valid MongoDB ObjectId');
 
-/**
- * Validates that a value is an array containing only supported genres,
- * with no duplicates. Used for favoriteGenres and dislikedGenres.
- */
+// Validate genre fields used in different preference requests
 const genreArrayRule = (field) =>
   body(field)
     .optional()
     .isArray()
     .withMessage(`${field} must be an array`)
     .custom((genres) => {
-      if (!genres.every((g) => SUPPORTED_GENRES.includes(g))) {
+      // Make sure every genre is supported by NextWatch
+      if (!genres.every((genre) => SUPPORTED_GENRES.includes(genre))) {
         throw new Error(
           `${field} contains unsupported values. Allowed: ${SUPPORTED_GENRES.join(', ')}`
         );
       }
+
+      // Do not allow the same genre to appear more than once
       if (new Set(genres).size !== genres.length) {
         throw new Error(`${field} must not contain duplicates`);
       }
+
       return true;
     });
 
+// Check that the selected language is supported
 const languageRule = body('preferredLanguage')
   .optional()
   .isString()
@@ -46,65 +53,60 @@ const languageRule = body('preferredLanguage')
     `preferredLanguage must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`
   );
 
-// POST validation 
-
+// Rules used when creating a new preference record
 const createRules = [
   genreArrayRule('favoriteGenres'),
   genreArrayRule('dislikedGenres'),
   languageRule,
 ];
 
-// PUT validation 
-// Accepts either full-replace arrays or patchMode additive fields.
-
+// Rules used when updating an existing preference record
 const updateRules = [
   userIdParam,
   genreArrayRule('favoriteGenres'),
   genreArrayRule('dislikedGenres'),
   languageRule,
-  // patchMode additive fields
+
+  // Check whether the user wants to add or remove individual genres
   body('patchMode')
     .optional()
     .isBoolean()
     .withMessage('patchMode must be a boolean'),
+
+  // Validate the genre lists used in patch mode
   genreArrayRule('addFavorites'),
   genreArrayRule('removeFavorites'),
   genreArrayRule('addDisliked'),
   genreArrayRule('removeDisliked'),
 ];
 
-// Routes (all JWT-protected) 
+// Create preferences for the currently logged-in user
+router.post(
+  '/',
+  protect,
+  createRules,
+  validate,
+  createPreferenceRecord
+);
 
-/**
- * POST /api/preferences
- * Create the authenticated user's genre preference record.
- *
- * Body:
- * {
- *   "favoriteGenres": ["Action", "Drama", "Sci-Fi"],
- *   "dislikedGenres": ["Horror"],
- *   "preferredLanguage": "en"
- * }
- */
-router.post('/', protect, createRules, validate, createPreferenceRecord);
+// Get the preferences of a specific user
+// Regular users can access their own record, while admins can access any record
+router.get(
+  '/:userId',
+  protect,
+  [userIdParam],
+  validate,
+  getPreferenceRecord
+);
 
-/**
- * GET /api/preferences/:userId
- * Retrieve a user's genre preferences.
- * Own record only (admins can fetch any).
- */
-router.get('/:userId', protect, [userIdParam], validate, getPreferenceRecord);
-
-/**
- * PUT /api/preferences/:userId
- * Update genre preferences — partial update, only sent fields change.
- *
- * Full-replace example:
- * { "favoriteGenres": ["Comedy", "Romance"] }
- *
- * Patch-mode example (add/remove individual genres):
- * { "patchMode": true, "addFavorites": ["Horror"], "removeFavorites": ["Action"] }
- */
-router.put('/:userId', protect, updateRules, validate, updatePreferenceRecord);
+// Update a user's saved preferences
+// The request can replace complete lists or add and remove individual genres
+router.put(
+  '/:userId',
+  protect,
+  updateRules,
+  validate,
+  updatePreferenceRecord
+);
 
 module.exports = router;
