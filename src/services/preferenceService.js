@@ -1,25 +1,19 @@
 const { Preference } = require('../models/Preference');
 const AppError = require('../utils/AppError');
 
-/**
- * Extract only the fields we allow callers to set / update.
- * Returns undefined for fields not present in the body (so callers
- * can detect "was this field sent at all?").
- */
+// Get only the preference fields that users are allowed to submit.
+// Fields that were not included in the request will remain undefined.
 const extractFields = (body) => ({
-  favoriteGenres:    body.favoriteGenres,
-  dislikedGenres:    body.dislikedGenres,
+  favoriteGenres: body.favoriteGenres,
+  dislikedGenres: body.dislikedGenres,
   preferredLanguage: body.preferredLanguage,
 });
 
-// createPreference
-
-/**
- * Creates a brand-new preference record for a user.
- * Throws 409 if a record already exists (callers should use PUT instead).
- */
+// Create a new preference record for a user
 const createPreference = async ({ userId, body }) => {
+  // Check whether the user already has saved preferences
   const existing = await Preference.findOne({ userId });
+
   if (existing) {
     throw new AppError(
       'A preference record already exists for this user. Use PUT /api/preferences/:userId to update it.',
@@ -27,54 +21,45 @@ const createPreference = async ({ userId, body }) => {
     );
   }
 
-  const { favoriteGenres, dislikedGenres, preferredLanguage } = extractFields(body);
+  const {
+    favoriteGenres,
+    dislikedGenres,
+    preferredLanguage,
+  } = extractFields(body);
 
+  // Only include fields that were provided in the request
   const preference = await Preference.create({
     userId,
-    ...(favoriteGenres    !== undefined && { favoriteGenres }),
-    ...(dislikedGenres    !== undefined && { dislikedGenres }),
+    ...(favoriteGenres !== undefined && { favoriteGenres }),
+    ...(dislikedGenres !== undefined && { dislikedGenres }),
     ...(preferredLanguage !== undefined && { preferredLanguage }),
   });
 
   return preference;
 };
 
-// getPreferenceByUserId
-/**
- * Fetches a user's preference record and populates basic user info.
- * Throws 404 if no record exists yet.
- */
+// Find the preference record belonging to a particular user
 const getPreferenceByUserId = async (userId) => {
+  // Include the user's name and email with the preference details
   const preference = await Preference.findOne({ userId }).populate(
     'userId',
     'fullName email'
   );
+
   if (!preference) {
     throw new AppError(
       'No preference record found for this user. Use POST /api/preferences to create one.',
       404
     );
   }
+
   return preference;
 };
 
-// updatePreference
-/**
- * Partially updates a preference record — only fields present in the request
- * body are changed; absent fields are left untouched.
- *
- * Supports two update strategies for array fields:
- *
- *   Full replace (default):
- *     { "favoriteGenres": ["Action", "Drama"] }
- *     → replaces the entire array
- *
- *   Additive patch (when body contains `patchMode: true`):
- *     { "patchMode": true, "addFavorites": ["Horror"], "removeFavorites": ["Action"] }
- *     → surgically adds/removes individual genres without touching the rest
- */
+// Update an existing preference record
 const updatePreference = async ({ userId, body }) => {
   const preference = await Preference.findOne({ userId });
+
   if (!preference) {
     throw new AppError(
       'No preference record found for this user. Use POST /api/preferences to create one first.',
@@ -82,39 +67,76 @@ const updatePreference = async ({ userId, body }) => {
     );
   }
 
-  const { favoriteGenres, dislikedGenres, preferredLanguage } = extractFields(body);
+  const {
+    favoriteGenres,
+    dislikedGenres,
+    preferredLanguage,
+  } = extractFields(body);
 
   if (body.patchMode) {
-    // Additive patch mode 
+    // Add or remove specific genres without replacing the complete list
+
     if (body.addFavorites?.length) {
-      const merged = [...new Set([...preference.favoriteGenres, ...body.addFavorites])];
+      // Add new favourite genres and remove any duplicates
+      const merged = [
+        ...new Set([
+          ...preference.favoriteGenres,
+          ...body.addFavorites,
+        ]),
+      ];
+
       preference.favoriteGenres = merged;
     }
+
     if (body.removeFavorites?.length) {
+      // Remove the selected genres from the favourite list
       preference.favoriteGenres = preference.favoriteGenres.filter(
-        (g) => !body.removeFavorites.includes(g)
+        (genre) => !body.removeFavorites.includes(genre)
       );
     }
+
     if (body.addDisliked?.length) {
-      const merged = [...new Set([...preference.dislikedGenres, ...body.addDisliked])];
+      // Add new disliked genres and remove any duplicates
+      const merged = [
+        ...new Set([
+          ...preference.dislikedGenres,
+          ...body.addDisliked,
+        ]),
+      ];
+
       preference.dislikedGenres = merged;
     }
+
     if (body.removeDisliked?.length) {
+      // Remove the selected genres from the disliked list
       preference.dislikedGenres = preference.dislikedGenres.filter(
-        (g) => !body.removeDisliked.includes(g)
+        (genre) => !body.removeDisliked.includes(genre)
       );
     }
   } else {
-    // Full-replace mode (default) 
-    if (favoriteGenres    !== undefined) preference.favoriteGenres    = favoriteGenres;
-    if (dislikedGenres    !== undefined) preference.dislikedGenres    = dislikedGenres;
+    // Replace the complete genre lists when patch mode is not enabled
+    if (favoriteGenres !== undefined) {
+      preference.favoriteGenres = favoriteGenres;
+    }
+
+    if (dislikedGenres !== undefined) {
+      preference.dislikedGenres = dislikedGenres;
+    }
   }
 
-  if (preferredLanguage !== undefined) preference.preferredLanguage = preferredLanguage;
+  // Update the language only when it was included in the request
+  if (preferredLanguage !== undefined) {
+    preference.preferredLanguage = preferredLanguage;
+  }
 
-  // pre-save hook validates no overlap and bumps updatedAt
+  // Saving runs the schema validation and updates the modified date
   await preference.save();
+
   return preference;
 };
 
-module.exports = { createPreference, getPreferenceByUserId, updatePreference };
+module.exports = {
+  createPreference,
+  getPreferenceByUserId,
+  updatePreference,
+};
