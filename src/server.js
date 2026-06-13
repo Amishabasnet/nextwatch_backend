@@ -7,7 +7,7 @@ const cookieParser = require('cookie-parser');
 dotenv.config();
 
 const connectDB = require('./config/db');
-const corsOptions = require('./config/cors');
+const corsOptions = require('./config/jwt');
 const errorHandler = require('./middleware/errorHandler');
 
 // Import all routes used by the NextWatch API
