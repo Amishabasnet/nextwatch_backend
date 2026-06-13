@@ -1,119 +1,153 @@
 const mongoose = require('mongoose');
 
-/**
- * ConsentItem — one granular data-sharing permission.
- * Each of the five consent categories shares this shape.
- */
+// This structure is used for each individual consent option
 const ConsentItemSchema = new mongoose.Schema(
   {
+    // Shows whether the user has agreed to this type of data use
     granted: {
       type: Boolean,
       required: true,
       default: false,
     },
-    // ISO timestamp of when this specific item was last toggled
+
+    // Stores the date when this consent option was last accepted
     grantedAt: {
       type: Date,
       default: null,
     },
   },
-  { _id: false } // embedded sub-docs don't need their own _id
+  {
+    // These small embedded records do not need separate IDs
+    _id: false,
+  }
 );
 
 const ConsentSchema = new mongoose.Schema(
   {
-    // Core required fields 
+    // Connect the consent record to a specific user
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'userId is required'],
-      unique: true, // one consent record per user
+      unique: true, // Each user can only have one consent record
       index: true,
     },
 
-    /**
-     * consentAccepted — true only when ALL five categories are granted.
-     * Computed and stored on every save for fast querying.
-     */
+    // Becomes true only when the user accepts every consent category
     consentAccepted: {
       type: Boolean,
       default: false,
     },
 
-    /**
-     * consentDate — timestamp of the most recent change to any consent item.
-     * Updated automatically in the pre-save hook.
-     */
+    // Stores the date of the most recent consent change
     consentDate: {
       type: Date,
       default: null,
     },
 
-    /**
-     * dataUsageDescription — plain-language explanation of how each data
-     * type will be used, stored so clients can surface it to the user.
-     */
+    // Explains how NextWatch uses the user's information
     dataUsageDescription: {
       type: String,
       trim: true,
-      maxlength: [1000, 'dataUsageDescription cannot exceed 1000 characters'],
+      maxlength: [
+        1000,
+        'dataUsageDescription cannot exceed 1000 characters',
+      ],
       default:
         'NextWatch uses your data solely to personalise your movie recommendations. ' +
         'No data is sold or shared with third parties. ' +
         'You may withdraw consent at any time.',
     },
 
-    // Five granular consent categories 
+    // Separate consent options for each type of user data
     consentItems: {
       moodSelection: {
         type: ConsentItemSchema,
-        default: () => ({ granted: false, grantedAt: null }),
+        default: () => ({
+          granted: false,
+          grantedAt: null,
+        }),
       },
+
       genrePreferences: {
         type: ConsentItemSchema,
-        default: () => ({ granted: false, grantedAt: null }),
+        default: () => ({
+          granted: false,
+          grantedAt: null,
+        }),
       },
+
       viewingHistory: {
         type: ConsentItemSchema,
-        default: () => ({ granted: false, grantedAt: null }),
+        default: () => ({
+          granted: false,
+          grantedAt: null,
+        }),
       },
+
       ratings: {
         type: ConsentItemSchema,
-        default: () => ({ granted: false, grantedAt: null }),
+        default: () => ({
+          granted: false,
+          grantedAt: null,
+        }),
       },
+
       feedback: {
         type: ConsentItemSchema,
-        default: () => ({ granted: false, grantedAt: null }),
+        default: () => ({
+          granted: false,
+          grantedAt: null,
+        }),
       },
     },
   },
   {
-    timestamps: true, // createdAt, updatedAt
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+    // Automatically add the creation and last updated dates
+    timestamps: true,
+    toJSON: {
+      virtuals: true,
+    },
+    toObject: {
+      virtuals: true,
+    },
   }
 );
 
-// Pre-save hook 
-// Keeps consentAccepted and consentDate in sync automatically.
+// Update the consent information before saving the record
 ConsentSchema.pre('save', function (next) {
   const items = this.consentItems;
 
-  // Stamp grantedAt for any item that was just turned on
-  const categories = ['moodSelection', 'genrePreferences', 'viewingHistory', 'ratings', 'feedback'];
+  // List of consent categories available in NextWatch
+  const categories = [
+    'moodSelection',
+    'genrePreferences',
+    'viewingHistory',
+    'ratings',
+    'feedback',
+  ];
+
   categories.forEach((key) => {
-    if (this.isModified(`consentItems.${key}.granted`) && items[key].granted) {
+    // Record the date when a consent option is accepted
+    if (
+      this.isModified(`consentItems.${key}.granted`) &&
+      items[key].granted
+    ) {
       items[key].grantedAt = new Date();
     }
+
+    // Remove the acceptance date when consent is withdrawn
     if (items[key].granted === false) {
       items[key].grantedAt = null;
     }
   });
 
-  // consentAccepted = true only when every category is granted
-  this.consentAccepted = categories.every((key) => items[key].granted === true);
+  // Mark the full consent as accepted only when every option is enabled
+  this.consentAccepted = categories.every(
+    (key) => items[key].granted === true
+  );
 
-  // consentDate = now whenever anything changed
+  // Update the consent date whenever the record changes
   if (this.isModified()) {
     this.consentDate = new Date();
   }
@@ -121,10 +155,7 @@ ConsentSchema.pre('save', function (next) {
   next();
 });
 
-// Instance helper 
-/**
- * Returns a clean summary of the consent record for API responses.
- */
+// Return the consent information needed in API responses
 ConsentSchema.methods.toSummary = function () {
   return {
     _id: this._id,

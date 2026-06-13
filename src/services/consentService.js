@@ -1,6 +1,7 @@
 const Consent = require('../models/Consent');
 const AppError = require('../utils/AppError');
 
+// Consent options available in NextWatch
 const CONSENT_CATEGORIES = [
   'moodSelection',
   'genrePreferences',
@@ -9,37 +10,35 @@ const CONSENT_CATEGORIES = [
   'feedback',
 ];
 
-/**
- * Build the consentItems sub-document from a flat request body.
- *
- * Accepts either the full nested shape:
- *   { consentItems: { moodSelection: { granted: true }, ... } }
- *
- * Or a convenient flat shape:
- *   { moodSelection: true, genrePreferences: false, ... }
- */
+// Convert the submitted consent values into the format used by the database
 const buildConsentItems = (body) => {
-  // Prefer explicit nested shape; fall back to flat keys on root
+  // Use the nested consentItems object when provided; otherwise use the main body
   const source = body.consentItems || body;
 
   const items = {};
+
   CONSENT_CATEGORIES.forEach((key) => {
     if (source[key] !== undefined) {
       const raw = source[key];
-      // Accept { granted: bool } or a plain boolean
-      const granted = typeof raw === 'object' ? Boolean(raw.granted) : Boolean(raw);
+
+      // Accept either a boolean value or an object containing granted
+      const granted =
+        typeof raw === 'object'
+          ? Boolean(raw.granted)
+          : Boolean(raw);
+
       items[`consentItems.${key}.granted`] = granted;
     }
   });
+
   return items;
 };
 
-/**
- * Create a brand-new consent record for a user.
- * Throws 409 if one already exists.
- */
+// Create a new consent record for a user
 const createConsent = async ({ userId, body }) => {
+  // Check whether the user already has a consent record
   const existing = await Consent.findOne({ userId });
+
   if (existing) {
     throw new AppError(
       'A consent record already exists for this user. Use PUT to update it.',
@@ -48,13 +47,20 @@ const createConsent = async ({ userId, body }) => {
   }
 
   const consentItems = {};
+
+  // Prepare every consent option before creating the record
   CONSENT_CATEGORIES.forEach((key) => {
     const source = body.consentItems || body;
     const raw = source[key];
+
     consentItems[key] = {
-      granted: raw !== undefined
-        ? (typeof raw === 'object' ? Boolean(raw.granted) : Boolean(raw))
-        : false,
+      // Use the submitted value or false when no value was provided
+      granted:
+        raw !== undefined
+          ? typeof raw === 'object'
+            ? Boolean(raw.granted)
+            : Boolean(raw)
+          : false,
       grantedAt: null,
     };
   });
@@ -68,24 +74,25 @@ const createConsent = async ({ userId, body }) => {
   return consent;
 };
 
-/**
- * Fetch a user's consent record.
- * Throws 404 if none exists yet.
- */
+// Find the consent record belonging to a specific user
 const getConsentByUserId = async (userId) => {
-  const consent = await Consent.findOne({ userId }).populate('userId', 'fullName email');
+  // Include the user's name and email with the consent information
+  const consent = await Consent.findOne({ userId }).populate(
+    'userId',
+    'fullName email'
+  );
+
   if (!consent) {
     throw new AppError('No consent record found for this user.', 404);
   }
+
   return consent;
 };
 
-/**
- * Partial-update a consent record.
- * Only fields present in the request body are changed.
- */
+// Update the existing consent record of a user
 const updateConsent = async ({ userId, body }) => {
   const consent = await Consent.findOne({ userId });
+
   if (!consent) {
     throw new AppError(
       'No consent record found for this user. Use POST to create one first.',
@@ -93,25 +100,32 @@ const updateConsent = async ({ userId, body }) => {
     );
   }
 
-  // Apply category changes
+  // Update only the consent options included in the request
   CONSENT_CATEGORIES.forEach((key) => {
     const source = body.consentItems || body;
+
     if (source[key] !== undefined) {
       const raw = source[key];
-      const granted = typeof raw === 'object' ? Boolean(raw.granted) : Boolean(raw);
+
+      const granted =
+        typeof raw === 'object'
+          ? Boolean(raw.granted)
+          : Boolean(raw);
+
       consent.consentItems[key].granted = granted;
     }
   });
 
-  // Apply top-level field changes
+  // Update the data usage explanation when a new value is provided
   if (body.dataUsageDescription !== undefined) {
     consent.dataUsageDescription = body.dataUsageDescription;
   }
 
-  // Mark nested path as modified so Mongoose detects the change
+  // Tell Mongoose that values inside consentItems have changed
   consent.markModified('consentItems');
 
   await consent.save();
+
   return consent;
 };
 
