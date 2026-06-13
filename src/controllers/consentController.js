@@ -6,9 +6,7 @@ const {
   updateConsent,
 } = require('../services/consentService');
 
-// @desc    Create a consent record for the authenticated user
-// @route   POST /api/consent
-// @access  Private (JWT required)
+// Create a consent record for the currently logged-in user
 const createConsentRecord = asyncHandler(async (req, res) => {
   const consent = await createConsent({
     userId: req.user._id,
@@ -22,11 +20,9 @@ const createConsentRecord = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get a user's consent record
-// @route   GET /api/consent/:userId
-// @access  Private (JWT required — own record or admin)
+// Get the consent record of a specific user
 const getConsentRecord = asyncHandler(async (req, res, next) => {
-  // Users may only read their own record; admins can read any
+  // Regular users can only voew their own consent record and admin is allowed to view any user's record
   if (
     req.user.role !== 'admin' &&
     req.user._id.toString() !== req.params.userId
@@ -45,11 +41,9 @@ const getConsentRecord = asyncHandler(async (req, res, next) => {
   });
 });
 
-// @desc    Update a user's consent record (partial update — PATCH semantics)
-// @route   PUT /api/consent/:userId
-// @access  Private (JWT required — own record or admin)
+// Update the consent record of a specific user
 const updateConsentRecord = asyncHandler(async (req, res, next) => {
-  // Users may only update their own record; admins can update any
+  // Users may only update their own record and admins can update any user's record
   if (
     req.user.role !== 'admin' &&
     req.user._id.toString() !== req.params.userId

@@ -1,27 +1,41 @@
 const Mood = require('../models/Mood');
 
-/**
- * @desc    Log a new mood entry
- * @route   POST /api/mood
- * @access  Private
- */
+// Save the user's current mood
 const logMood = async (req, res, next) => {
   try {
     const { mood } = req.body;
 
+    // Make sure a mood was included in the request
     if (!mood) {
-      return res.status(400).json({ message: 'Please provide a mood' });
-    }
-
-    const trimmedMood = mood.toLowerCase().trim();
-    const allowedMoods = ['happy', 'sad', 'relaxed', 'excited', 'bored', 'romantic', 'stressed', 'adventurous'];
-
-    if (!allowedMoods.includes(trimmedMood)) {
       return res.status(400).json({
-        message: 'Invalid mood. Must be one of: happy, sad, relaxed, excited, bored, romantic, stressed, adventurous',
+        message: 'Please provide a mood',
       });
     }
 
+    // Convert the mood to lowercase and remove extra spaces
+    const trimmedMood = mood.toLowerCase().trim();
+
+    // List of moods supported by NextWatch
+    const allowedMoods = [
+      'happy',
+      'sad',
+      'relaxed',
+      'excited',
+      'bored',
+      'romantic',
+      'stressed',
+      'adventurous',
+    ];
+
+    // Check whether the submitted mood is supported
+    if (!allowedMoods.includes(trimmedMood)) {
+      return res.status(400).json({
+        message:
+          'Invalid mood. Must be one of: happy, sad, relaxed, excited, bored, romantic, stressed, adventurous',
+      });
+    }
+
+    // Create a new mood entry for the logged-in user
     const moodEntry = await Mood.create({
       user: req.user._id,
       mood: trimmedMood,
@@ -33,31 +47,36 @@ const logMood = async (req, res, next) => {
   }
 };
 
-/**
- * @desc    Get mood log history
- * @route   GET /api/mood/history
- * @access  Private
- */
+// Get all moods previously logged by the user
 const getMoodHistory = async (req, res, next) => {
   try {
-    const history = await Mood.find({ user: req.user._id }).sort({ createdAt: -1 });
+    // Show the newest mood entries first
+    const history = await Mood.find({
+      user: req.user._id,
+    }).sort({
+      createdAt: -1,
+    });
+
     res.status(200).json(history);
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * @desc    Get latest logged mood
- * @route   GET /api/mood/latest
- * @access  Private
- */
+// Get the most recently logged mood
 const getLatestMood = async (req, res, next) => {
   try {
-    const latest = await Mood.findOne({ user: req.user._id }).sort({ createdAt: -1 });
+    const latest = await Mood.findOne({
+      user: req.user._id,
+    }).sort({
+      createdAt: -1,
+    });
+
+    // Return null when the user has not logged any moods yet
     if (!latest) {
-      return res.status(200).json(null); // Return null if no mood history
+      return res.status(200).json(null);
     }
+
     res.status(200).json(latest);
   } catch (error) {
     next(error);
