@@ -1,100 +1,83 @@
-const Watchlist = require('../models/Watchlist');
-const Movie = require('../models/Movie');
+const asyncHandler = require('../utils/asyncHandler');
+const AppError = require('../utils/AppError');
+const watchlistSvc = require('../services/watchlistService');
 
-// Add a movie to the logged-in user's watchlist
-const addToWatchlist = async (req, res, next) => {
-  try {
-    const { movieId } = req.body;
+// Add a movie to the currently logged-in user's watchlist
+const addToWatchlist = asyncHandler(async (req, res) => {
+  const { entry, movie } = await watchlistSvc.addToWatchlist({
+    userId: req.user._id,
+    movieId: req.body.movieId,
+  });
 
-    // Make sure a movie ID was included in the request
-    if (!movieId) {
-      return res.status(400).json({
-        message: 'Please provide a movieId',
-      });
-    }
+  res.status(201).json({
+    success: true,
+    message: `"${movie.title}" added to your watchlist.`,
+    data: {
+      entry: {
+        _id: entry._id,
+        savedAt: entry.savedAt,
+        createdAt: entry.createdAt,
+        movie: movie.toSummary(),
+      },
+    },
+  });
+});
 
-    // Check that the selected movie exists
-    const movieExists = await Movie.findById(movieId);
-
-    if (!movieExists) {
-      return res.status(404).json({
-        message: 'Movie not found',
-      });
-    }
-
-    // Check whether the movie is already in the user's watchlist
-    const duplicate = await Watchlist.findOne({
-      user: req.user._id,
-      movie: movieId,
-    });
-
-    if (duplicate) {
-      return res.status(400).json({
-        message: 'Movie is already in your watchlist',
-      });
-    }
-
-    // Create a new watchlist entry for the user
-    const watchlistItem = await Watchlist.create({
-      user: req.user._id,
-      movie: movieId,
-    });
-
-    res.status(201).json(watchlistItem);
-  } catch (error) {
-    next(error);
+// Get a user's watchlist with pagination
+const getUserWatchlist = asyncHandler(async (req, res, next) => {
+  // Regular users can only view their own watchlist.
+  // An admin is allowed to view any user's watchlist.
+  if (
+    req.user.role !== 'admin' &&
+    req.user._id.toString() !== req.params.userId
+  ) {
+    return next(
+      new AppError('You are not authorised to view this watchlist.', 403)
+    );
   }
-};
 
-// Get all movies saved in the user's watchlist
-const getWatchlist = async (req, res, next) => {
-  try {
-    // Include the complete movie details and show recently added items first
-    const watchlist = await Watchlist.find({
-      user: req.user._id,
-    })
-      .populate('movie')
-      .sort({
-        createdAt: -1,
-      });
+  const { entries, total, page, limit } =
+    await watchlistSvc.getWatchlist(
+      req.params.userId,
+      req.query
+    );
 
-    res.status(200).json(watchlist);
-  } catch (error) {
-    next(error);
-  }
-};
+  // Work out the total number of available pages
+  const totalPages = Math.ceil(total / limit) || 1;
+
+  res.status(200).json({
+    success: true,
+    message:
+      total > 0
+        ? 'Watchlist retrieved successfully.'
+        : 'Your watchlist is empty.',
+    data: {
+      results: entries.map((entry) => entry.toSummary()),
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    },
+  });
+});
 
 // Remove a movie from the logged-in user's watchlist
-const removeFromWatchlist = async (req, res, next) => {
-  try {
-    const { movieId } = req.params;
+const removeFromWatchlist = asyncHandler(async (req, res) => {
+  // The user ID comes from the login token so users cannot edit another watchlist
+  await watchlistSvc.removeFromWatchlist({
+    userId: req.user._id,
+    movieId: req.params.movieId,
+  });
 
-    // Find the selected movie in the user's watchlist
-    const watchlistItem = await Watchlist.findOne({
-      user: req.user._id,
-      movie: movieId,
-    });
+  res.status(200).json({
+    success: true,
+    message: 'Movie removed from your watchlist.',
+    data: null,
+  });
+});
 
-    // Return an error when the movie is not in the watchlist
-    if (!watchlistItem) {
-      return res.status(404).json({
-        message: 'Movie not found in your watchlist',
-      });
-    }
-
-    // Delete the movie from the watchlist
-    await watchlistItem.deleteOne();
-
-    res.status(200).json({
-      message: 'Movie removed from watchlist',
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-module.exports = {
-  addToWatchlist,
-  getWatchlist,
-  removeFromWatchlist,
-};
+module.exports = { addToWatchlist, getUserWatchlist, removeFromWatchlist,};
