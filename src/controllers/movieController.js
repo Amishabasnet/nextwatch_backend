@@ -1,240 +1,215 @@
-const Movie = require('../models/Movie');
-
-/**
- * @desc    Create a new movie (Admin only)
- * @route   POST /api/admin/movies
- * @access  Private/Admin
- */
-const createMovie = async (req, res, next) => {
-  try {
-    const {
-      title,
-      description,
-      genre,
-      language,
-      releaseYear,
-      actors,
-      director,
-      rating,
-      tags,
-      moodCategory,
-      posterUrl,
-      trailerUrl,
-    } = req.body;
-
-    // Field validations
-    if (!title || !description || !genre || !language || !releaseYear || !actors || !director) {
-      return res.status(400).json({
-        message: 'Please provide all required fields: title, description, genre, language, releaseYear, actors, director',
-      });
-    }
-
-    if (!Array.isArray(genre) || genre.length === 0) {
-      return res.status(400).json({ message: 'genre must be a non-empty array' });
-    }
-    if (!Array.isArray(actors) || actors.length === 0) {
-      return res.status(400).json({ message: 'actors must be a non-empty array' });
-    }
-    if (tags && !Array.isArray(tags)) {
-      return res.status(400).json({ message: 'tags must be an array' });
-    }
-
-    const movie = await Movie.create({
-      title,
-      description,
-      genre,
-      language,
-      releaseYear: Number(releaseYear),
-      actors,
-      director,
-      rating: rating !== undefined ? Number(rating) : 0,
-      tags: tags || [],
-      moodCategory: moodCategory ? moodCategory.toLowerCase().trim() : '',
-      posterUrl: posterUrl || '',
-      trailerUrl: trailerUrl || '',
-    });
-
-    res.status(201).json(movie);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Get all movies (Public)
- * @route   GET /api/movies
- * @access  Public
- */
-const getMovies = async (req, res, next) => {
-  try {
-    const movies = await Movie.find({}).sort({ createdAt: -1 });
-    res.status(200).json(movies);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Get single movie by ID (Public)
- * @route   GET /api/movies/:id
- * @access  Public
- */
-const getMovieById = async (req, res, next) => {
-  try {
-    const movie = await Movie.findById(req.params.id);
-    if (!movie) {
-      return res.status(404).json({ message: 'Movie not found' });
-    }
-    res.status(200).json(movie);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Update a movie (Admin only)
- * @route   PUT /api/admin/movies/:id
- * @access  Private/Admin
- */
-const updateMovie = async (req, res, next) => {
-  try {
-    const movie = await Movie.findById(req.params.id);
-    if (!movie) {
-      return res.status(404).json({ message: 'Movie not found' });
-    }
-
-    const {
-      title,
-      description,
-      genre,
-      language,
-      releaseYear,
-      actors,
-      director,
-      rating,
-      tags,
-      moodCategory,
-      posterUrl,
-      trailerUrl,
-    } = req.body;
-
-    // Validation
-    if (genre && (!Array.isArray(genre) || genre.length === 0)) {
-      return res.status(400).json({ message: 'genre must be a non-empty array' });
-    }
-    if (actors && (!Array.isArray(actors) || actors.length === 0)) {
-      return res.status(400).json({ message: 'actors must be a non-empty array' });
-    }
-    if (tags && !Array.isArray(tags)) {
-      return res.status(400).json({ message: 'tags must be an array' });
-    }
-
-    // Update fields
-    if (title !== undefined) movie.title = title;
-    if (description !== undefined) movie.description = description;
-    if (genre !== undefined) movie.genre = genre;
-    if (language !== undefined) movie.language = language;
-    if (releaseYear !== undefined) movie.releaseYear = Number(releaseYear);
-    if (actors !== undefined) movie.actors = actors;
-    if (director !== undefined) movie.director = director;
-    if (rating !== undefined) movie.rating = Number(rating);
-    if (tags !== undefined) movie.tags = tags;
-    if (moodCategory !== undefined) movie.moodCategory = moodCategory ? moodCategory.toLowerCase().trim() : '';
-    if (posterUrl !== undefined) movie.posterUrl = posterUrl;
-    if (trailerUrl !== undefined) movie.trailerUrl = trailerUrl;
-
-    const updatedMovie = await movie.save();
-    res.status(200).json(updatedMovie);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Delete a movie (Admin only)
- * @route   DELETE /api/admin/movies/:id
- * @access  Private/Admin
- */
-const deleteMovie = async (req, res, next) => {
-  try {
-    const movie = await Movie.findById(req.params.id);
-    if (!movie) {
-      return res.status(404).json({ message: 'Movie not found' });
-    }
-
-    await movie.deleteOne();
-    res.status(200).json({ message: 'Movie deleted successfully' });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Search and filter movies (Public)
- * @route   GET /api/movies/search
- * @access  Public
- */
-const searchMovies = async (req, res, next) => {
-  try {
-    const { title, genre, mood, language, rating, year, sortBy } = req.query;
-
-    const query = {};
-
-    // 1. Title Search (Case-insensitive Regex)
-    if (title) {
-      query.title = { $regex: title, $options: 'i' };
-    }
-
-    // 2. Genre Filter (Matches any of the array elements)
-    if (genre) {
-      query.genre = { $regex: genre, $options: 'i' };
-    }
-
-    // 3. Mood Category Filter
-    if (mood) {
-      query.moodCategory = mood.toLowerCase().trim();
-    }
-
-    // 4. Language Filter
-    if (language) {
-      query.language = { $regex: language, $options: 'i' };
-    }
-
-    // 5. Rating Filter (Minimum Rating)
-    if (rating) {
-      query.rating = { $gte: Number(rating) };
-    }
-
-    // 6. Release Year Filter
-    if (year) {
-      query.releaseYear = Number(year);
-    }
-
-    // 7. Sort Options
-    let sort = {};
-    if (sortBy === 'popularity') {
-      // Use higher rating and release year as sorting proxy for popularity
-      sort = { rating: -1, releaseYear: -1 };
-    } else if (sortBy === 'rating') {
-      sort = { rating: -1 };
-    } else if (sortBy === 'year') {
-      sort = { releaseYear: -1 };
-    } else {
-      sort = { createdAt: -1 };
-    }
-
-    const movies = await Movie.find(query).sort(sort);
-    res.status(200).json(movies);
-  } catch (error) {
-    next(error);
-  }
-};
-
-module.exports = {
-  createMovie,
-  getMovies,
+const asyncHandler = require('../utils/asyncHandler');
+const AppError = require('../utils/AppError');
+const { paginatedResponse } = require('../utils/apiResponse');
+const {
+  getAllMovies,
   getMovieById,
+  createMovie,
   updateMovie,
   deleteMovie,
   searchMovies,
+} = require('../services/movieService');
+
+// @desc    Get all movies with filtering, search, sorting, and pagination
+// @route   GET /api/movies  |  GET /api/v1/movies
+// @access  Public
+//
+// Query params:
+//   page, limit, genre, language, moodTag, status, releaseYear,
+//   minRating, search, sortBy
+
+const getMovies = asyncHandler(async (req, res) => {
+  const { movies, total, page, limit } = await getAllMovies(req.query);
+
+  res.status(200).json({
+    success: true,
+    message: 'Movies retrieved successfully.',
+    data: paginatedResponse(
+      movies.map((m) => m.toSummary()),
+      total,
+      page,
+      limit
+    ),
+  });
+});
+
+// @desc    Get a single movie with its reviews
+// @route   GET /api/movies/:id  |  GET /api/v1/movies/:id
+// @access  Public
+
+const getMovie = asyncHandler(async (req, res) => {
+  const movie = await getMovieById(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Movie retrieved successfully.',
+    data: {
+      movie: {
+        ...movie.toDetail(),
+        reviews: movie.reviews ?? [],
+      },
+    },
+  });
+});
+
+// @desc    Create a new movie
+// @route   POST /api/movies  |  POST /api/v1/movies
+// @access  Private — Admin only
+
+const createMovieHandler = asyncHandler(async (req, res) => {
+  const movie = await createMovie(req.body);
+
+  res.status(201).json({
+    success: true,
+    message: 'Movie created successfully.',
+    data: { movie: movie.toDetail() },
+  });
+});
+
+// @desc    Update a movie (partial update — only sent fields change)
+// @route   PUT /api/movies/:id  |  PUT /api/v1/movies/:id
+// @access  Private — Admin only
+
+const updateMovieHandler = asyncHandler(async (req, res) => {
+  const movie = await updateMovie(req.params.id, req.body);
+
+  res.status(200).json({
+    success: true,
+    message: 'Movie updated successfully.',
+    data: { movie: movie.toDetail() },
+  });
+});
+
+// @desc    Delete a movie
+// @route   DELETE /api/movies/:id  |  DELETE /api/v1/movies/:id
+// @access  Private — Admin only
+const deleteMovieHandler = asyncHandler(async (req, res) => {
+  await deleteMovie(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Movie deleted successfully.',
+    data: null,
+  });
+});
+
+// @desc    Get personalised movie recommendations (mood + genre aware)
+// @route   GET /api/v1/movies/recommendations
+// @access  Private
+
+const getRecommendations = asyncHandler(async (req, res) => {
+  const Movie = require('../models/Movie');
+  const { getLatestMoodByUserId } = require('../services/moodService');
+
+  const genres = req.user.preferences?.genres || [];
+  let moodFilter = {};
+
+  // Enrich with the user's latest mood if available
+  try {
+    const latestMood = await getLatestMoodByUserId(req.user._id.toString());
+    moodFilter = { moodTags: latestMood.mood };
+  } catch (_) {
+    // No mood on record — fall back to genre-only recommendations
+  }
+
+  const baseFilter = {
+    _id: { $nin: req.user.watchlist || [] },
+    ...(genres.length && { genres: { $in: genres } }),
+  };
+
+  // Try mood-aware query first; fall back to genre-only if no results
+  let movies = await Movie.find({ ...baseFilter, ...moodFilter })
+    .sort('-rating.average -rating.count')
+    .limit(20);
+
+  if (!movies.length && Object.keys(moodFilter).length) {
+    movies = await Movie.find(baseFilter)
+      .sort('-rating.average -rating.count')
+      .limit(20);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Recommendations retrieved successfully.',
+    data: { movies: movies.map((m) => m.toSummary()) },
+  });
+});
+
+// @desc    Search and filter movies
+// @route   GET /api/movies/search  |  GET /api/v1/movies/search
+// @access  Public
+//
+// All parameters are optional individually; at least one must be supplied.
+//
+// Query params:
+//   title       – partial title match (case-insensitive)
+//   genre       – one or more genres: "Action" | "Action,Comedy" | genre[]=…
+//   mood        – mood tag exact match (Happy | Sad | Relaxed | …)
+//   rating      – minimum average rating (0–10)
+//   releaseYear – exact release year
+//   yearFrom    – release year range start (use with yearTo)
+//   yearTo      – release year range end   (use with yearFrom)
+//   language    – full name ("English") or BCP-47 code ("en")
+//   keyword     – partial match inside keywords array
+//   page        – page number (default 1)
+//   limit       – results per page (default 20, max 100)
+//   sortBy      – sort field (default -rating.average)
+
+/** Search parameters that count as active filters. */
+const SEARCH_PARAMS = [
+  'title', 'genre', 'mood', 'rating',
+  'releaseYear', 'yearFrom', 'yearTo',
+  'language', 'keyword',
+];
+
+const searchMoviesHandler = asyncHandler(async (req, res, next) => {
+  // Require at least one search dimension — prevents accidental full-table scans
+  const hasFilter = SEARCH_PARAMS.some(
+    (p) => req.query[p] !== undefined && req.query[p] !== ''
+  );
+
+  if (!hasFilter) {
+    return next(
+      new AppError(
+        `Provide at least one search parameter: ${SEARCH_PARAMS.join(', ')}.`,
+        400
+      )
+    );
+  }
+
+  const { movies, total, page, limit, appliedFilters, activeFilterCount } =
+    await searchMovies(req.query);
+
+  const totalPages = Math.ceil(total / limit);
+
+  res.status(200).json({
+    success: true,
+    message:
+      total > 0
+        ? `Found ${total} movie${total === 1 ? '' : 's'} matching your search.`
+        : 'No movies found matching your search criteria.',
+    data: {
+      results: movies.map((m) => m.toSummary()),
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      appliedFilters,
+      activeFilterCount,
+    },
+  });
+});
+
+module.exports = {
+  getMovies,
+  getMovie,
+  createMovie: createMovieHandler,
+  updateMovie: updateMovieHandler,
+  deleteMovie: deleteMovieHandler,
+  getRecommendations,
+  searchMovies: searchMoviesHandler,
 };

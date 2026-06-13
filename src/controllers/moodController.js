@@ -1,71 +1,78 @@
-const Mood = require('../models/Mood');
+const asyncHandler = require('../utils/asyncHandler');
+const AppError = require('../utils/AppError');
+const {
+  saveMood,
+  getMoodsByUserId,
+  getLatestMoodByUserId,
+} = require('../services/moodService');
 
-/**
- * @desc    Log a new mood entry
- * @route   POST /api/mood
- * @access  Private
- */
-const logMood = async (req, res, next) => {
-  try {
-    const { mood } = req.body;
 
-    if (!mood) {
-      return res.status(400).json({ message: 'Please provide a mood' });
-    }
+// @desc    Save a mood selection for the authenticated user
+// @route   POST /api/moods
+// @access  Private (JWT required)
 
-    const trimmedMood = mood.toLowerCase().trim();
-    const allowedMoods = ['happy', 'sad', 'relaxed', 'excited', 'bored', 'romantic', 'stressed', 'adventurous'];
+const createMoodEntry = asyncHandler(async (req, res) => {
+  const mood = await saveMood({
+    userId: req.user._id,
+    mood: req.body.mood,
+    selectedAt: req.body.selectedAt,
+  });
 
-    if (!allowedMoods.includes(trimmedMood)) {
-      return res.status(400).json({
-        message: 'Invalid mood. Must be one of: happy, sad, relaxed, excited, bored, romantic, stressed, adventurous',
-      });
-    }
+  res.status(201).json({
+    success: true,
+    message: 'Mood saved successfully.',
+    data: { mood: mood.toSummary() },
+  });
+});
 
-    const moodEntry = await Mood.create({
-      user: req.user._id,
-      mood: trimmedMood,
-    });
-
-    res.status(201).json(moodEntry);
-  } catch (error) {
-    next(error);
+// @desc    Get full mood history for a user
+// @route   GET /api/moods/:userId
+// @access  Private (JWT required — own record or admin)
+const getUserMoods = asyncHandler(async (req, res, next) => {
+  // Users can only read their own history; admins can read any
+  if (
+    req.user.role !== 'admin' &&
+    req.user._id.toString() !== req.params.userId
+  ) {
+    return next(
+      new AppError('You are not authorised to view these mood records.', 403)
+    );
   }
-};
 
-/**
- * @desc    Get mood log history
- * @route   GET /api/mood/history
- * @access  Private
- */
-const getMoodHistory = async (req, res, next) => {
-  try {
-    const history = await Mood.find({ user: req.user._id }).sort({ createdAt: -1 });
-    res.status(200).json(history);
-  } catch (error) {
-    next(error);
+  const moods = await getMoodsByUserId(req.params.userId);
+
+  res.status(200).json({
+    success: true,
+    message: 'Mood history retrieved successfully.',
+    data: {
+      count: moods.length,
+      moods: moods.map((m) => m.toSummary()),
+    },
+  });
+});
+
+// @desc    Get the most recent mood for a user (used by recommendation engine)
+// @route   GET /api/moods/:userId/latest
+// @access  Private (JWT required — own record or admin)
+
+const getLatestMood = asyncHandler(async (req, res, next) => {
+  // Users can only read their own record; admins can read any
+  if (
+    req.user.role !== 'admin' &&
+    req.user._id.toString() !== req.params.userId
+  ) {
+    return next(
+      new AppError('You are not authorised to view these mood records.', 403)
+    );
   }
-};
 
-/**
- * @desc    Get latest logged mood
- * @route   GET /api/mood/latest
- * @access  Private
- */
-const getLatestMood = async (req, res, next) => {
-  try {
-    const latest = await Mood.findOne({ user: req.user._id }).sort({ createdAt: -1 });
-    if (!latest) {
-      return res.status(200).json(null); // Return null if no mood history
-    }
-    res.status(200).json(latest);
-  } catch (error) {
-    next(error);
-  }
-};
+  const mood = await getLatestMoodByUserId(req.params.userId);
 
-module.exports = {
-  logMood,
-  getMoodHistory,
-  getLatestMood,
-};
+  res.status(200).json({
+    success: true,
+    message: 'Latest mood retrieved successfully.',
+    data: { mood: mood.toSummary() },
+  });
+});
+
+module.exports = { createMoodEntry, getUserMoods, getLatestMood };
