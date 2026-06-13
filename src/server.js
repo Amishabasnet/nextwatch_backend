@@ -8,6 +8,7 @@ const moodRoutes = require('./routes/moodRoutes');
 const movieRoutes = require('./routes/movieRoutes');
 const featureRoutes = require('./routes/featureRoutes');
 const historyRoutes = require('./routes/historyRoutes');
+const ratingRoutes = require('./routes/ratingRoutes');
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/api/mood', moodRoutes);
 app.use('/api/movies', movieRoutes);
 app.use('/api/features', featureRoutes);
 app.use('/api/history', historyRoutes);
+app.use('/api/ratings', ratingRoutes);
 
 // Health check
 app.get('/', (req, res) => {
