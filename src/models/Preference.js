@@ -1,9 +1,7 @@
 const mongoose = require('mongoose');
 
-/**
- * Canonical list of genres supported by NextWatch.
- * Shared with routes/validation so there is a single source of truth.
- */
+// These are the movie genres currently available in NextWatch.
+// This list can also be used in routes and validation.
 const SUPPORTED_GENRES = [
   'Action',
   'Comedy',
@@ -17,35 +15,33 @@ const SUPPORTED_GENRES = [
   'Mystery',
 ];
 
-/**
- * Supported BCP-47 language codes.
- * Extend this list as NextWatch adds more content libraries.
- */
+// Languages currently supported by NextWatch.
+// More languages can be added here in the future.
 const SUPPORTED_LANGUAGES = [
-  'en',  // English
-  'es',  // Spanish
-  'fr',  // French
-  'de',  // German
-  'hi',  // Hindi
-  'ja',  // Japanese
-  'ko',  // Korean
-  'pt',  // Portuguese
-  'zh',  // Chinese
-  'ar',  // Arabic
+  'en', // English
+  'es', // Spanish
+  'fr', // French
+  'de', // German
+  'hi', // Hindi
+  'ja', // Japanese
+  'ko', // Korean
+  'pt', // Portuguese
+  'zh', // Chinese
+  'ar', // Arabic
 ];
 
 const PreferenceSchema = new mongoose.Schema(
   {
-    // Identity 
+    // Connects the preferences to a specific user
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'userId is required'],
-      unique: true,   // one preference record per user
+      unique: true, // Each user can only have one preference record
       index: true,
     },
 
-    // Genre preferences 
+    // Genres selected as favourites by the user
     favoriteGenres: {
       type: [String],
       enum: {
@@ -55,13 +51,14 @@ const PreferenceSchema = new mongoose.Schema(
       default: [],
       validate: {
         validator(genres) {
-          // No duplicates
+          // Prevent the same genre from being selected more than once
           return new Set(genres).size === genres.length;
         },
         message: 'favoriteGenres must not contain duplicate values',
       },
     },
 
+    // Genres the user does not want to see
     dislikedGenres: {
       type: [String],
       enum: {
@@ -71,13 +68,14 @@ const PreferenceSchema = new mongoose.Schema(
       default: [],
       validate: {
         validator(genres) {
+          // Make sure the disliked genre list has no duplicates
           return new Set(genres).size === genres.length;
         },
         message: 'dislikedGenres must not contain duplicate values',
       },
     },
 
-    // Language preference 
+    // The user's preferred movie language
     preferredLanguage: {
       type: String,
       enum: {
@@ -87,30 +85,27 @@ const PreferenceSchema = new mongoose.Schema(
       default: 'en',
     },
 
-    // Audit timestamp 
-    /**
-     * updatedAt is kept as an explicit field (not relying solely on
-     * Mongoose timestamps) so it is always present at the top level and
-     * easy for clients to read without parsing metadata.
-     */
+    // Stores the date when the preferences were last updated
     updatedAt: {
       type: Date,
       default: Date.now,
     },
   },
   {
-    timestamps: true,   // also adds createdAt / updatedAt to the document
+    // Automatically adds createdAt and updatedAt fields
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
 );
 
-// Pre-save hook 
+// Run this validation before saving the user's preferences
 PreferenceSchema.pre('save', function (next) {
-  // Ensure a genre cannot be both liked and disliked simultaneously
-  const overlap = this.favoriteGenres.filter((g) =>
-    this.dislikedGenres.includes(g)
+  // A genre should not appear in both favourite and disliked lists
+  const overlap = this.favoriteGenres.filter((genre) =>
+    this.dislikedGenres.includes(genre)
   );
+
   if (overlap.length > 0) {
     return next(
       new Error(
@@ -119,16 +114,12 @@ PreferenceSchema.pre('save', function (next) {
     );
   }
 
-  // Keep explicit updatedAt in sync
+  // Update the date whenever the preference record is saved
   this.updatedAt = new Date();
   next();
 });
 
-// Instance method 
-
-/**
- * Clean response shape used by all three endpoints.
- */
+// Returns only the preference information needed by the frontend
 PreferenceSchema.methods.toSummary = function () {
   return {
     _id: this._id,
@@ -143,4 +134,8 @@ PreferenceSchema.methods.toSummary = function () {
 
 const Preference = mongoose.model('Preference', PreferenceSchema);
 
-module.exports = { Preference, SUPPORTED_GENRES, SUPPORTED_LANGUAGES };
+module.exports = {
+  Preference,
+  SUPPORTED_GENRES,
+  SUPPORTED_LANGUAGES,
+};
