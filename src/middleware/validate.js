@@ -1,14 +1,13 @@
 const { validationResult } = require('express-validator');
-const AppError = require('../utils/AppError');
+const { ValidationError } = require('../errors/AppError');
 
-// Check the request for any validation errors
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const messages = errors.array().map((e) => e.msg);
-    return next(new AppError(messages.join('. '), 422));
+    const messages = errors.array().map((e) => e.msg).join(', ');
+    return next(new ValidationError(messages));
   }
   next();
 };
 
-module.exports = validate;
+module.exports = { validate };

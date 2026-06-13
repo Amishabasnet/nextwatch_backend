@@ -1,117 +1,59 @@
-const asyncHandler = require('../utils/asyncHandler');
-const AppError = require('../utils/AppError');
-const historySvc = require('../services/historyService');
+const HistoryService = require('../services/historyService');
+const { apiResponse } = require('../types/express.types');
 
-// Record a new movie interaction for the logged-in user
-const recordEvent = asyncHandler(async (req, res) => {
-  const event = await historySvc.recordEvent({
-    userId: req.user._id,
-    movieId: req.body.movieId,
-    actionType: req.body.actionType,
-    timestamp: req.body.timestamp,
-    metadata: req.body.metadata,
-  });
-
-  res.status(201).json({
-    success: true,
-    message: `"${req.body.actionType}" event recorded successfully.`,
-    data: {
-      event: {
-        _id: event._id,
-        userId: event.userId,
-        movieId: event.movieId,
-        actionType: event.actionType,
-        timestamp: event.timestamp,
-        metadata: event.metadata,
-        createdAt: event.createdAt,
-      },
-    },
-  });
-});
-
-// Get a user's history with optional filters and pagination
-const getUserHistory = asyncHandler(async (req, res, next) => {
-  // Regular users can only view their own history.
-  // An admin is allowed to view any user's history.
-  if (
-    req.user.role !== 'admin' &&
-    req.user._id.toString() !== req.params.userId
-  ) {
-    return next(
-      new AppError('You are not authorised to view this history.', 403)
-    );
-  }
-
-  const { events, total, page, limit, actionSummary } =
-    await historySvc.getHistory(
-      req.params.userId,
-      req.query
-    );
-
-  // Calculate the number of pages available
-  const totalPages = Math.ceil(total / limit) || 1;
-
-  res.status(200).json({
-    success: true,
-    message:
-      total > 0
-        ? 'Viewing history retrieved successfully.'
-        : 'No history found for this user.',
-    data: {
-      results: events.map((event) => event.toSummary()),
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
-      },
-
-      // Show the total activity for each type of movie interaction
-      actionSummary,
-    },
-  });
-});
-
-// Delete all history or only events of a selected action type
-const clearUserHistory = asyncHandler(async (req, res, next) => {
-  // Regular users can only delete their own history.
-  // An admin is allowed to delete any user's history.
-  if (
-    req.user.role !== 'admin' &&
-    req.user._id.toString() !== req.params.userId
-  ) {
-    return next(
-      new AppError('You are not authorised to delete this history.', 403)
-    );
-  }
-
-  const { deletedCount } = await historySvc.clearHistory(
-    req.params.userId,
-    {
-      actionType: req.query.actionType,
+const HistoryController = {
+  async addToHistory(req, res, next) {
+    try {
+      const result = await HistoryService.addToHistory(req.user._id, req.body);
+      res.status(201).json(apiResponse(true, 'Added to watch history', result));
+    } catch (error) {
+      next(error);
     }
-  );
+  },
 
-  // Describe whether all history or one type of event was removed
-  const scope = req.query.actionType
-    ? `"${req.query.actionType}" events`
-    : 'viewing history';
+  async getHistory(req, res, next) {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+      const result = await HistoryService.getHistory(req.user._id, {
+        page: Number(page),
+        limit: Number(limit),
+      });
+      res.status(200).json(apiResponse(true, 'Watch history fetched', result));
+    } catch (error) {
+      next(error);
+    }
+  },
 
-  res.status(200).json({
-    success: true,
-    message: `${deletedCount} ${scope} record${
-      deletedCount === 1 ? '' : 's'
-    } deleted successfully.`,
-    data: {
-      deletedCount,
-    },
-  });
-});
+  async updateHistoryEntry(req, res, next) {
+    try {
+      const result = await HistoryService.updateHistoryEntry(
+        req.user._id,
+        req.params.movieId,
+        req.body
+      );
+      res.status(200).json(apiResponse(true, 'History entry updated', result));
+    } catch (error) {
+      next(error);
+    }
+  },
 
-module.exports = {
-  recordEvent,
-  getUserHistory,
-  clearUserHistory,
+  async removeFromHistory(req, res, next) {
+    try {
+      const result = await HistoryService.removeFromHistory(req.user._id, req.params.movieId);
+      res.status(200).json(apiResponse(true, result.message, null));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async clearHistory(req, res, next) {
+    try {
+      const result = await HistoryService.clearHistory(req.user._id);
+      res.status(200).json(apiResponse(true, result.message, null));
+    } catch (error) {
+      next(error);
+    }
+  },
 };
+
+module.exports = HistoryController;

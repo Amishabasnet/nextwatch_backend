@@ -1,11 +1,21 @@
 const express = require('express');
-const { getMovies, getMovieById, searchMovies } = require('../controllers/movieController');
+const MovieController = require('../controllers/movieController');
+const { authenticate } = require('../middleware/authenticate');
+const { validate } = require('../middleware/validate');
+const { createMovieValidator, updateMovieValidator } = require('../validators/movieValidator');
 
 const router = express.Router();
 
-// Define /search BEFORE /:id to prevent route param collision
-router.get('/search', searchMovies);
-router.get('/', getMovies);
-router.get('/:id', getMovieById);
+// Public routes
+router.get('/', MovieController.getAllMovies);
+router.get('/search', MovieController.searchMovies);
+router.get('/:id', MovieController.getMovieById);
+
+// Protected routes
+router.use(authenticate);
+router.get('/personalized/for-me', MovieController.getPersonalizedMovies);
+router.post('/', createMovieValidator, validate, MovieController.createMovie);
+router.put('/:id', updateMovieValidator, validate, MovieController.updateMovie);
+router.delete('/:id', MovieController.deleteMovie);
 
 module.exports = router;
