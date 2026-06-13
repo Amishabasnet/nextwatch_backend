@@ -1,30 +1,34 @@
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
 
-/**
- * Finds a user by email, including the hashed password field.
- * Throws if not found (avoids leaking email existence via timing).
- */
+// Find a user by email and include the password for login verification
 const findUserByEmail = async (email) => {
   return User.findOne({ email }).select('+password');
 };
 
-/**
- * Creates a new user document.
- */
+// Create and save a new user account
 const createUser = async ({ name, email, password }) => {
-  return User.create({ name, email, password });
+  return User.create({
+    name,
+    email,
+    password,
+  });
 };
 
-/**
- * Validates credentials and returns the user if valid.
- */
+// Check whether the email and password entered by the user are correct
 const validateCredentials = async (email, password) => {
   const user = await findUserByEmail(email);
+
+  // Return the same error for an invalid email or password
   if (!user || !(await user.matchPassword(password))) {
     throw new AppError('Invalid email or password', 401);
   }
+
   return user;
 };
 
-module.exports = { findUserByEmail, createUser, validateCredentials };
+module.exports = {
+  findUserByEmail,
+  createUser,
+  validateCredentials,
+};

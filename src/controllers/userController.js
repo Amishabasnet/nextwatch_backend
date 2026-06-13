@@ -4,33 +4,39 @@ const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
 const { sendResponse } = require('../utils/apiResponse');
 
-// @desc    Get all users
-// @route   GET /api/v1/users
-// @access  Private/Admin
+// Get the list of all registered users
 const getUsers = asyncHandler(async (req, res) => {
   const users = await User.find();
+
   sendResponse(res, 200, { users }, 'Users retrieved');
 });
 
-// @desc    Get single user
-// @route   GET /api/v1/users/:id
-// @access  Private/Admin
+// Get the details of a user using their ID
 const getUser = asyncHandler(async (req, res, next) => {
   const user = await User.findById(req.params.id);
-  if (!user) return next(new AppError('User not found', 404));
+
+  // Return an error when the user cannot be found
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+
   sendResponse(res, 200, { user }, 'User retrieved');
 });
 
-// @desc    Update user profile
-// @route   PUT /api/v1/users/profile
-// @access  Private
+// Update the profile of the currently logged-in user
 const updateProfile = asyncHandler(async (req, res) => {
+  // These are the only profile fields that users are allowed to update
   const allowedFields = ['name', 'avatar', 'preferences'];
   const updates = {};
+
+  // Add only the fields included in the request
   allowedFields.forEach((field) => {
-    if (req.body[field] !== undefined) updates[field] = req.body[field];
+    if (req.body[field] !== undefined) {
+      updates[field] = req.body[field];
+    }
   });
 
+  // Save the changes and return the updated user details
   const user = await User.findByIdAndUpdate(req.user.id, updates, {
     new: true,
     runValidators: true,
@@ -39,61 +45,87 @@ const updateProfile = asyncHandler(async (req, res) => {
   sendResponse(res, 200, { user }, 'Profile updated');
 });
 
-// @desc    Delete user
-// @route   DELETE /api/v1/users/:id
-// @access  Private/Admin
+// Remove a user account from the system
 const deleteUser = asyncHandler(async (req, res, next) => {
   const user = await User.findByIdAndDelete(req.params.id);
-  if (!user) return next(new AppError('User not found', 404));
+
+  // Return an error when the user does not exist
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+
   sendResponse(res, 200, null, 'User deleted');
 });
 
-// @desc    Add movie to watchlist
-// @route   POST /api/v1/users/watchlist/:movieId
-// @access  Private
+// Add a movie to the logged-in user's watchlist
 const addToWatchlist = asyncHandler(async (req, res, next) => {
   const movie = await Movie.findById(req.params.movieId);
-  if (!movie) return next(new AppError('Movie not found', 404));
 
+  // Make sure the selected movie exists
+  if (!movie) {
+    return next(new AppError('Movie not found', 404));
+  }
+
+  // Add the movie only when it is not already in the watchlist
   await User.findByIdAndUpdate(req.user.id, {
-    $addToSet: { watchlist: req.params.movieId },
+    $addToSet: {
+      watchlist: req.params.movieId,
+    },
   });
 
   sendResponse(res, 200, null, 'Movie added to watchlist');
 });
 
-// @desc    Remove movie from watchlist
-// @route   DELETE /api/v1/users/watchlist/:movieId
-// @access  Private
+// Remove a movie from the logged-in user's watchlist
 const removeFromWatchlist = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(req.user.id, {
-    $pull: { watchlist: req.params.movieId },
+    $pull: {
+      watchlist: req.params.movieId,
+    },
   });
 
   sendResponse(res, 200, null, 'Movie removed from watchlist');
 });
 
-// @desc    Get user watchlist
-// @route   GET /api/v1/users/watchlist
-// @access  Private
+// Get all movies saved in the user's watchlist
 const getWatchlist = asyncHandler(async (req, res) => {
+  // Replace movie IDs with their complete movie details
   const user = await User.findById(req.user.id).populate('watchlist');
-  sendResponse(res, 200, { watchlist: user.watchlist }, 'Watchlist retrieved');
+
+  sendResponse(
+    res,
+    200,
+    { watchlist: user.watchlist },
+    'Watchlist retrieved'
+  );
 });
 
-// @desc    Toggle movie favourite
-// @route   POST /api/v1/users/favorites/:movieId
-// @access  Private
+// Add or remove a movie from the user's favourites
 const toggleFavorite = asyncHandler(async (req, res, next) => {
   const movie = await Movie.findById(req.params.movieId);
-  if (!movie) return next(new AppError('Movie not found', 404));
+
+  // Make sure the selected movie exists
+  if (!movie) {
+    return next(new AppError('Movie not found', 404));
+  }
 
   const user = await User.findById(req.user.id);
+
+  // Check whether the movie is already in the favourites list
   const isFavorite = user.favorites.includes(req.params.movieId);
 
+  // Remove the movie when it is already saved, otherwise add it
   const update = isFavorite
-    ? { $pull: { favorites: req.params.movieId } }
-    : { $addToSet: { favorites: req.params.movieId } };
+    ? {
+        $pull: {
+          favorites: req.params.movieId,
+        },
+      }
+    : {
+        $addToSet: {
+          favorites: req.params.movieId,
+        },
+      };
 
   await User.findByIdAndUpdate(req.user.id, update);
 

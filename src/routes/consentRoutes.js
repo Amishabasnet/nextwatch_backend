@@ -1,37 +1,40 @@
 const express = require('express');
 const { body, param } = require('express-validator');
+
 const {
   createConsentRecord,
   getConsentRecord,
   updateConsentRecord,
 } = require('../controllers/consentController');
+
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
 const router = express.Router();
 
-// Reusable validators 
-
-// Validate a single consent category item (optional field, must be boolean if present)
+// Check that a consent option contains either true or false
 const consentItemRule = (fieldPath) =>
   body(fieldPath)
     .optional()
     .isBoolean()
     .withMessage(`${fieldPath} must be a boolean (true or false)`);
 
-// All five category validators — used in both POST and PUT
+// Validation rules for all consent options
 const consentItemRules = [
   consentItemRule('moodSelection'),
   consentItemRule('genrePreferences'),
   consentItemRule('viewingHistory'),
   consentItemRule('ratings'),
   consentItemRule('feedback'),
-  // Also accept the nested consentItems.* shape
+
+  // Allow consent options to be submitted inside the consentItems object
   consentItemRule('consentItems.moodSelection'),
   consentItemRule('consentItems.genrePreferences'),
   consentItemRule('consentItems.viewingHistory'),
   consentItemRule('consentItems.ratings'),
   consentItemRule('consentItems.feedback'),
+
+  // Check the optional explanation provided for data usage
   body('dataUsageDescription')
     .optional()
     .isString()
@@ -40,50 +43,34 @@ const consentItemRules = [
     .withMessage('dataUsageDescription cannot exceed 1000 characters'),
 ];
 
+// Check that the user ID in the URL is a valid MongoDB ID
 const userIdParamRule = [
   param('userId')
     .isMongoId()
     .withMessage('userId must be a valid MongoDB ObjectId'),
 ];
 
-// Routes (all protected by JWT) 
+// Create a consent record for the currently logged-in user
+router.post(
+  '/',
+  protect,
+  consentItemRules,
+  validate,
+  createConsentRecord
+);
 
-/**
- * POST /api/consent
- * Create a new consent record for the authenticated user.
- *
- * Body (flat form accepted):
- * {
- *   "moodSelection": true,
- *   "genrePreferences": true,
- *   "viewingHistory": false,
- *   "ratings": true,
- *   "feedback": false,
- *   "dataUsageDescription": "Optional custom text"
- * }
- *
- * Or nested:
- * {
- *   "consentItems": {
- *     "moodSelection": true,
- *     ...
- *   }
- * }
- */
-router.post('/', protect, consentItemRules, validate, createConsentRecord);
+// Get the consent record of a specific user
+// Regular users can access their own record, while admins can access any record
+router.get(
+  '/:userId',
+  protect,
+  userIdParamRule,
+  validate,
+  getConsentRecord
+);
 
-/**
- * GET /api/consent/:userId
- * Retrieve a user's consent record.
- * Users can only fetch their own; admins can fetch any.
- */
-router.get('/:userId', protect, userIdParamRule, validate, getConsentRecord);
-
-/**
- * PUT /api/consent/:userId
- * Partially update a consent record — only supplied fields are changed.
- * Users can only update their own; admins can update any.
- */
+// Update the consent record of a specific user
+// Only the consent fields included in the request will be changed
 router.put(
   '/:userId',
   protect,
