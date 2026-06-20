@@ -6,7 +6,7 @@ the full Node.js backend in the loop.
 
 from fastapi import APIRouter
 
-from app.models.movie_catalog import catalog
+from ..models.movie_catalog import catalog
 
 router = APIRouter(prefix="/ml", tags=["catalog"])
 

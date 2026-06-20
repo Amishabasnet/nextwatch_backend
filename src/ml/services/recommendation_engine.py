@@ -46,8 +46,8 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from app.models.movie_catalog import catalog
-from app.schemas.recommendation_schema import RecommendationRequest, RecommendedMovie
+from ..models.movie_catalog import catalog
+from ..schemas.recommendation_schema import RecommendationRequest, RecommendedMovie
 
 
 # ─── Tunable hybrid weights ───────────────────────────────────────────────────

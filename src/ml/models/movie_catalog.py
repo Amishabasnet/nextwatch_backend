@@ -15,7 +15,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from app.data.movies_data import MOVIES
+from ..data.movies_data import MOVIES
 
 
 def _build_content_soup(row: pd.Series) -> str:

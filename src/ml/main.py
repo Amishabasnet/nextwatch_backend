@@ -6,7 +6,7 @@ A FastAPI microservice providing hybrid content-based movie
 recommendations for the NextWatch platform.
 
 Run locally:
-    uvicorn app.main:app --reload --port 8000
+    uvicorn ml.main:app --reload --port 8000
 
 Then the Node.js backend's ML_API_URL should point to:
     http://localhost:8000
@@ -15,7 +15,7 @@ Then the Node.js backend's ML_API_URL should point to:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import recommend_router, catalog_router
+from .routers import recommend_router, catalog_router
 
 app = FastAPI(
     title="NextWatch Recommendation Service",

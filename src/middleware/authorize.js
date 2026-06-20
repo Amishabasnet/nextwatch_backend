@@ -1,4 +1,5 @@
 const { ForbiddenError } = require('../errors/AppError');
+
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
