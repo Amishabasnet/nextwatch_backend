@@ -18,6 +18,14 @@ const HistoryRepository = {
     return { records, total };
   },
 
+  async findAllByUser(userId, limit = 50) {
+    const records = await History.find({ user: userId })
+      .populate('movie', 'title genres releaseYear')
+      .limit(limit)
+      .sort({ watchedAt: -1 });
+    return { records, total: records.length };
+  },
+
   async findOne(userId, movieId) {
     return History.findOne({ user: userId, movie: movieId });
   },
