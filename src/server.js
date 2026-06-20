@@ -10,6 +10,7 @@ const featureRoutes = require('./routes/featureRoutes');
 const historyRoutes = require('./routes/historyRoutes');
 const ratingRoutes = require('./routes/ratingRoutes');
 const recommendationRoutes = require('./routes/recommendationRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
@@ -25,7 +26,7 @@ app.use('/api/features', featureRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/recommendations', recommendationRoutes);
-
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/', (req, res) => {

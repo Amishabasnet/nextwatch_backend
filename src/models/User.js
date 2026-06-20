@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema(
     consentDate: {
       type: Date,
     },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+    },
   },
   { timestamps: true }
 );
