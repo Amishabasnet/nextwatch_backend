@@ -7,8 +7,8 @@ This is the single entry point the Node.js NextWatch backend calls
 
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.recommendation_schema import RecommendationRequest, RecommendationResponse
-from app.services.recommendation_engine import generate_recommendations
+from ..schemas.recommendation_schema import RecommendationRequest, RecommendationResponse
+from ..services.recommendation_engine import generate_recommendations
 
 router = APIRouter(prefix="/ml", tags=["recommendations"])
 
