@@ -12,6 +12,7 @@ const watchlistRoutes = require('./routes/watchlistRoutes');
 const ratingRoutes = require('./routes/ratingRoutes');
 const recommendationRoutes = require('./routes/recommendationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const mlPerformanceRoutes = require('./routes/mlPerformanceRoutes');
 const privacyRoutes = require('./routes/privacyRoutes');
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/watchlist', watchlistRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/ml-performance', mlPerformanceRoutes);
 app.use('/api', privacyRoutes);
 
 app.get('/', (req, res) => {

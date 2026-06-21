@@ -3,6 +3,7 @@ const toUserDTO = (user) => ({
   name: user.name,
   email: user.email,
   consentGiven: user.consentGiven,
+  role: user.role,
   createdAt: user.createdAt,
 });
 

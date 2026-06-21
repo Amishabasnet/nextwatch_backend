@@ -13,8 +13,20 @@ const UserRepository = {
     return User.findOne({ email }).select('+password');
   },
 
+  async findByIdWithPassword(id) {
+    return User.findById(id).select('+password');
+  },
+
   async findByIdAndUpdate(id, data) {
     return User.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+  },
+
+  async updateConsent(id, consentGiven) {
+    return User.findByIdAndUpdate(
+      id,
+      { consentGiven, consentDate: new Date() },
+      { new: true, runValidators: true }
+    );
   },
 
   async delete(id) {

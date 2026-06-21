@@ -31,7 +31,8 @@ const AuthController = {
 
   async updateProfile(req, res, next) {
     try {
-      const result = await AuthService.updateProfile(req.user._id, req.body);
+      const { name, email } = req.body;
+      const result = await AuthService.updateProfile(req.user._id, { name, email });
       res.status(200).json(apiResponse(true, 'Profile updated', result));
     } catch (error) {
       next(error);
