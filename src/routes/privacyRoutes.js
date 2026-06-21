@@ -21,7 +21,7 @@ router.delete(
 );
 
 router.delete(
-  '/history/:userId',
+  '/privacy/history/:userId',
   authenticate,
   authorizeSelf('userId'),
   clearHistoryValidator,
