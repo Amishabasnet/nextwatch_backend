@@ -22,6 +22,53 @@ const MovieRepository = {
     return Movie.find({ $text: { $search: query } }).limit(20);
   },
 
+  async searchWithFilters({ title, keyword, genre, mood, minRating, releaseYear, language, limit = 50 } = {}) {
+    const filter = {};
+    const andClauses = [];
+
+    // Title — case-insensitive regex
+    if (title && title.trim()) {
+      filter.title = { $regex: title.trim(), $options: 'i' };
+    }
+
+    // Keyword — search in title + description
+    if (keyword && keyword.trim()) {
+      const kw = { $regex: keyword.trim(), $options: 'i' };
+      andClauses.push({ $or: [{ title: kw }, { description: kw }] });
+    }
+
+    // Genre — match inside genres array (case-insensitive)
+    if (genre && genre.trim()) {
+      filter.genres = { $regex: new RegExp(`^${genre.trim()}$`, 'i') };
+    }
+
+    // Mood — match inside moods array (case-insensitive)
+    if (mood && mood.trim()) {
+      filter.moods = { $regex: new RegExp(`^${mood.trim()}$`, 'i') };
+    }
+
+    // Minimum rating
+    if (minRating !== undefined && minRating !== '' && !isNaN(Number(minRating))) {
+      filter.averageScore = { $gte: Number(minRating) };
+    }
+
+    // Release year — exact match
+    if (releaseYear && !isNaN(Number(releaseYear))) {
+      filter.releaseYear = Number(releaseYear);
+    }
+
+    // Language — case-insensitive exact match
+    if (language && language.trim()) {
+      filter.language = { $regex: new RegExp(`^${language.trim()}$`, 'i') };
+    }
+
+    if (andClauses.length > 0) {
+      filter.$and = andClauses;
+    }
+
+    return Movie.find(filter).limit(limit).sort({ averageScore: -1 });
+  },
+
   async findByGenres(genres) {
     return Movie.find({ genres: { $in: genres } }).limit(20);
   },
