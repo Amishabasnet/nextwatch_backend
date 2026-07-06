@@ -14,8 +14,8 @@ router.get('/:id', MovieController.getMovieById);
 router.use(authenticate);
 router.get('/personalized/for-me', MovieController.getPersonalizedMovies);
 
-router.post('/', authorize('admin'), createMovieValidator, validate, MovieController.createMovie);
-router.put('/:id', authorize('admin'), updateMovieValidator, validate, MovieController.updateMovie);
+router.post('/', authorize('admin'), ...createMovieValidator, validate, MovieController.createMovie);
+router.put('/:id', authorize('admin'), ...updateMovieValidator, validate, MovieController.updateMovie);
 router.delete('/:id', authorize('admin'), MovieController.deleteMovie);
 
 module.exports = router;
