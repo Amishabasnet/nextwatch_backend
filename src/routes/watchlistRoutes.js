@@ -7,7 +7,7 @@ const { addWatchlistValidator } = require('../validators/watchlistValidator');
 const router = express.Router();
 
 router.use(authenticate);
-router.post('/', addWatchlistValidator, validate, WatchlistController.addToWatchlist);
+router.post('/', ...addWatchlistValidator, validate, WatchlistController.addToWatchlist);
 router.get('/', WatchlistController.getWatchlist);
 router.delete('/clear', WatchlistController.clearWatchlist);
 router.delete('/:movieId', WatchlistController.removeFromWatchlist);

@@ -38,8 +38,38 @@ const MovieController = {
 
   async searchMovies(req, res, next) {
     try {
-      const result = await MovieService.searchMovies(req.query.q || '');
+      const { q, title, keyword, genre, mood, rating, releaseYear, language } = req.query;
+
+      // If only a plain `q` param is sent (old behaviour), use text search
+      const hasAdvancedFilters = title || keyword || genre || mood || rating || releaseYear || language;
+
+      let result;
+      if (hasAdvancedFilters) {
+        result = await MovieService.searchMoviesWithFilters({
+          title: title || q,
+          keyword,
+          genre,
+          mood,
+          rating,
+          releaseYear,
+          language,
+        });
+      } else {
+        result = await MovieService.searchMovies(q || '');
+      }
+
       res.status(200).json(apiResponse(true, 'Search results', result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getByMood(req, res, next) {
+    try {
+      const { mood } = req.params;
+      const movies = await require('../repositories/movieRepository').findByMoods([mood]);
+      const { toMovieListDTO } = require('../dtos/movie.dto');
+      res.status(200).json(apiResponse(true, 'Movies fetched by mood', toMovieListDTO(movies)));
     } catch (error) {
       next(error);
     }

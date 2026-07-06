@@ -7,15 +7,19 @@ const { createMovieValidator, updateMovieValidator } = require('../validators/mo
 
 const router = express.Router();
 
-router.get('/', MovieController.getAllMovies);
-router.get('/search', MovieController.searchMovies);
-router.get('/:id', MovieController.getMovieById);
+// Public
+router.get('/',               MovieController.getAllMovies);
+router.get('/search',         MovieController.searchMovies);
+router.get('/by-mood/:mood',  MovieController.getByMood);
+router.get('/:id',            MovieController.getMovieById);
 
+// Protected
 router.use(authenticate);
 router.get('/personalized/for-me', MovieController.getPersonalizedMovies);
 
-router.post('/', authorize('admin'), createMovieValidator, validate, MovieController.createMovie);
-router.put('/:id', authorize('admin'), updateMovieValidator, validate, MovieController.updateMovie);
+// Admin only
+router.post('/',    authorize('admin'), ...createMovieValidator, validate, MovieController.createMovie);
+router.put('/:id',  authorize('admin'), ...updateMovieValidator, validate, MovieController.updateMovie);
 router.delete('/:id', authorize('admin'), MovieController.deleteMovie);
 
 module.exports = router;

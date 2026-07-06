@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.post('/', moodValidator, validate, MoodController.logMood);
+router.post('/', ...moodValidator, validate, MoodController.logMood);
 router.get('/', MoodController.getMoodHistory);
 router.get('/latest', MoodController.getLatestMood);
 router.get('/recommendations', MoodController.getRecommendationsByMood);

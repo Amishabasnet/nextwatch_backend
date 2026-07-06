@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', PreferenceController.getPreferences);
-router.put('/', preferenceValidator, validate, PreferenceController.upsertPreferences);
+router.put('/', ...preferenceValidator, validate, PreferenceController.upsertPreferences);
 router.delete('/', PreferenceController.deletePreferences);
 
 module.exports = router;

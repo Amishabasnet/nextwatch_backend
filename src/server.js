@@ -21,19 +21,9 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
   : ['http://localhost:3000'];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin && process.env.NODE_ENV !== 'production') return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      callback(new Error(`CORS policy: origin '${origin}' is not allowed`));
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-    optionsSuccessStatus: 204,
-  })
-);
+console.log('🔐 CORS Allowed Origins:', allowedOrigins);
+
+app.use(cors());
 
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));

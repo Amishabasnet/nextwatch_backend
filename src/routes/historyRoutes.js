@@ -8,9 +8,9 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.post('/', addHistoryValidator, validate, HistoryController.addToHistory);
+router.post('/', ...addHistoryValidator, validate, HistoryController.addToHistory);
+router.put('/:movieId', ...updateHistoryValidator, validate, HistoryController.updateHistoryEntry);
 router.get('/', HistoryController.getHistory);
-router.put('/:movieId', updateHistoryValidator, validate, HistoryController.updateHistoryEntry);
 router.delete('/clear', HistoryController.clearHistory);
 router.delete('/:movieId', HistoryController.removeFromHistory);
 

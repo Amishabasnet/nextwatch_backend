@@ -34,10 +34,22 @@ const MovieService = {
     return toMovieListDTO(movies);
   },
 
+  async searchMoviesWithFilters({ title, keyword, genre, mood, rating, releaseYear, language } = {}) {
+    const movies = await MovieRepository.searchWithFilters({
+      title,
+      keyword,
+      genre,
+      mood,
+      minRating: rating,
+      releaseYear,
+      language,
+    });
+    return toMovieListDTO(movies);
+  },
+
   async getPersonalizedMovies(userId) {
     const prefs = await PreferenceRepository.findByUser(userId);
     if (!prefs || prefs.favoriteGenres.length === 0) {
-      // Fall back to latest movies
       const { movies } = await MovieRepository.findAll({ limit: 20 });
       return toMovieListDTO(movies);
     }
