@@ -1,37 +1,43 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const bcrypt   = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
   {
     name: {
-      type: String,
+      type:     String,
       required: [true, 'Name is required'],
-      trim: true,
+      trim:     true,
     },
     email: {
-      type: String,
-      required: [true, 'Email is required'],
-      unique: true,
+      type:      String,
+      required:  [true, 'Email is required'],
+      unique:    true,
       lowercase: true,
-      trim: true,
+      trim:      true,
     },
     password: {
-      type: String,
-      required: [true, 'Password is required'],
+      type:      String,
+      required:  [true, 'Password is required'],
       minlength: 6,
-      select: false,
+      select:    false,
     },
     consentGiven: {
-      type: Boolean,
+      type:    Boolean,
       default: false,
     },
     consentDate: {
       type: Date,
     },
     role: {
-      type: String,
-      enum: ['user', 'admin'],
+      type:    String,
+      enum:    ['user', 'admin'],
       default: 'user',
+    },
+    // Hashed refresh tokens — one per device/session (stored as array to support multi-device)
+    refreshTokens: {
+      type:    [String],
+      default: [],
+      select:  false,
     },
   },
   { timestamps: true }
