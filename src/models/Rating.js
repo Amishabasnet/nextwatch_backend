@@ -43,11 +43,10 @@ ratingSchema.index({ movieId: 1 });
 ratingSchema.index({ userId: 1 });
 
 // Pre-save guard: liked and disliked cannot both be true
-ratingSchema.pre('save', function (next) {
+ratingSchema.pre('save', function () {
   if (this.liked && this.disliked) {
-    return next(new Error('A rating cannot be both liked and disliked'));
+    throw new Error('A rating cannot be both liked and disliked');
   }
-  next();
 });
 
 const Rating = mongoose.model('Rating', ratingSchema);
