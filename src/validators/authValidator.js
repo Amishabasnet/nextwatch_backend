@@ -4,8 +4,7 @@ const registerValidator = [
   body('name').trim().notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
   body('phone')
-    .optional({ checkFalsy: true })
-    .trim()
+        .trim()
     .matches(/^[+]?[\d\s()-]{7,15}$/)
     .withMessage('Enter a valid phone number'),
   body('password')
