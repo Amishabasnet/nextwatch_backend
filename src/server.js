@@ -3,6 +3,7 @@ const cors = require('cors');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const authRoutes = require('./routes/authRoutes');
+const consentRoutes = require('./routes/consentRoutes');
 const preferenceRoutes = require('./routes/preferenceRoutes');
 const moodRoutes = require('./routes/moodRoutes');
 const movieRoutes = require('./routes/movieRoutes');
@@ -21,7 +22,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
   : ['http://localhost:3000'];
 
-console.log('🔐 CORS Allowed Origins:', allowedOrigins);
+console.log('CORS Allowed Origins:', allowedOrigins);
 
 app.use(cors());
 
@@ -29,6 +30,7 @@ app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/consent', consentRoutes);
 app.use('/api/preferences', preferenceRoutes);
 app.use('/api/mood', moodRoutes);
 app.use('/api/movies', movieRoutes);
