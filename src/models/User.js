@@ -15,6 +15,11 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim:      true,
     },
+    phone: {
+      type:    String,
+      trim:    true,
+      default: '',
+    },
     password: {
       type:      String,
       required:  [true, 'Password is required'],
@@ -33,7 +38,6 @@ const userSchema = new mongoose.Schema(
       enum:    ['user', 'admin'],
       default: 'user',
     },
-    // Hashed refresh tokens — one per device/session (stored as array to support multi-device)
     refreshTokens: {
       type:    [String],
       default: [],
