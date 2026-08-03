@@ -4,11 +4,11 @@ const { toAuthResponseDTO } = require('../dtos/auth.dto');
 const { NotFoundError, UnauthorizedError } = require('../errors/AppError');
 
 const AuthService = {
-  async register({ name, email, password, consentGiven = false }) {
+  async register({ name, email, phone = '', password, consentGiven = false }) {
     const existing = await User.findOne({ email });
     if (existing) throw new UnauthorizedError('Email already in use');
 
-    const user = await User.create({ name, email, password, consentGiven });
+    const user = await User.create({ name, email, phone, password, consentGiven });
 
     const token        = generateToken({ id: user._id });
     const refreshToken = generateRefreshToken({ id: user._id });
