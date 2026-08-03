@@ -58,7 +58,10 @@ const movieSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-movieSchema.index({ title: 'text', description: 'text' });
+movieSchema.index(
+  { title: 'text', description: 'text' },
+  { language_override: 'textIndexLanguage' }
+);
 
 const Movie = mongoose.model('Movie', movieSchema);
 module.exports = Movie;

@@ -48,7 +48,7 @@ const toFallbackRecommendationsDTO = (movies, fallbackReason) => ({
   totalRecommendations: movies.length,
   source: 'fallback',
   recommendations: movies.map((m) => ({
-    movieId: m._id,
+    movieId: m._id ?? m.movieId,
     title: m.title,
     posterUrl: m.posterUrl ?? null,
     genres: m.genres ?? [],
