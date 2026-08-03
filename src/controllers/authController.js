@@ -20,6 +20,26 @@ const AuthController = {
     }
   },
 
+  async refresh(req, res, next) {
+    try {
+      const { refreshToken } = req.body;
+      const result = await AuthService.refresh(refreshToken);
+      res.status(200).json(apiResponse(true, 'Token refreshed', result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async logout(req, res, next) {
+    try {
+      const { refreshToken } = req.body;
+      await AuthService.logout(req.user._id, refreshToken);
+      res.status(200).json(apiResponse(true, 'Logged out successfully', null));
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async getProfile(req, res, next) {
     try {
       const result = await AuthService.getProfile(req.user._id);

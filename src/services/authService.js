@@ -1,50 +1,100 @@
-const UserRepository = require('../repositories/userRepository');
-const { generateToken } = require('../config/jwt');
-const { toAuthResponseDTO, toUserDTO } = require('../dtos/auth.dto');
-const { ConflictError, UnauthorizedError } = require('../errors/AppError');
+const User = require('../models/User');
+const { generateToken, generateRefreshToken } = require('../config/jwt');
+const { toAuthResponseDTO } = require('../dtos/auth.dto');
+const { NotFoundError, UnauthorizedError } = require('../errors/AppError');
 
 const AuthService = {
-  async register({ name, email, password, consentGiven }) {
-    const existing = await UserRepository.findByEmail(email);
-    if (existing) {
-      throw new ConflictError('Email already in use');
-    }
+  async register({ name, email, password, consentGiven = false }) {
+    const existing = await User.findOne({ email });
+    if (existing) throw new UnauthorizedError('Email already in use');
 
-    const user = await UserRepository.create({
-      name,
-      email,
-      password,
-      consentGiven: !!consentGiven,
-      consentDate: consentGiven ? new Date() : undefined,
+    const user = await User.create({ name, email, password, consentGiven });
+
+    const token        = generateToken({ id: user._id });
+    const refreshToken = generateRefreshToken({ id: user._id });
+
+    // Persist hashed refresh token — load with select('+refreshTokens')
+    await User.findByIdAndUpdate(user._id, {
+      $push: { refreshTokens: refreshToken },
     });
 
-    const token = generateToken({ id: user._id });
-    return toAuthResponseDTO(user, token);
+    return toAuthResponseDTO(user, token, refreshToken);
   },
 
   async login({ email, password }) {
-    const user = await UserRepository.findByEmail(email);
-    if (!user) {
-      throw new UnauthorizedError('Invalid credentials');
-    }
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) throw new UnauthorizedError('Invalid email or password');
 
     const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      throw new UnauthorizedError('Invalid credentials');
+    if (!isMatch) throw new UnauthorizedError('Invalid email or password');
+
+    const token        = generateToken({ id: user._id });
+    const refreshToken = generateRefreshToken({ id: user._id });
+
+    // Persist — cap stored tokens at 5 (one per device roughly)
+    const userDoc = await User.findById(user._id).select('+refreshTokens');
+    const tokens  = userDoc.refreshTokens ?? [];
+    const trimmed = tokens.slice(-4); // keep last 4, add the new one → max 5
+    await User.findByIdAndUpdate(user._id, {
+      $set: { refreshTokens: [...trimmed, refreshToken] },
+    });
+
+    return toAuthResponseDTO(user, token, refreshToken);
+  },
+
+  async refresh(incomingRefreshToken) {
+    if (!incomingRefreshToken) throw new UnauthorizedError('Refresh token required');
+
+    // Verify signature & expiry
+    let payload;
+    try {
+      const { verifyRefreshToken } = require('../config/jwt');
+      payload = verifyRefreshToken(incomingRefreshToken);
+    } catch {
+      throw new UnauthorizedError('Invalid or expired refresh token');
     }
 
-    const token = generateToken({ id: user._id });
-    return toAuthResponseDTO(user, token);
+    // Check token is still stored on the user (rotation check)
+    const user = await User.findById(payload.id).select('+refreshTokens');
+    if (!user) throw new UnauthorizedError('User not found');
+
+    if (!user.refreshTokens.includes(incomingRefreshToken)) {
+      // Token reuse detected — invalidate ALL tokens for this user
+      await User.findByIdAndUpdate(payload.id, { $set: { refreshTokens: [] } });
+      throw new UnauthorizedError('Refresh token reuse detected — please log in again');
+    }
+
+    // Rotate: remove old token, issue new pair
+    const newAccessToken  = generateToken({ id: user._id });
+    const newRefreshToken = generateRefreshToken({ id: user._id });
+
+    const remaining = user.refreshTokens.filter(t => t !== incomingRefreshToken);
+    await User.findByIdAndUpdate(user._id, {
+      $set: { refreshTokens: [...remaining, newRefreshToken] },
+    });
+
+    return { token: newAccessToken, refreshToken: newRefreshToken };
+  },
+
+  async logout(userId, refreshToken) {
+    // Remove only this device's refresh token
+    if (refreshToken) {
+      await User.findByIdAndUpdate(userId, {
+        $pull: { refreshTokens: refreshToken },
+      });
+    }
   },
 
   async getProfile(userId) {
-    const user = await UserRepository.findById(userId);
-    return toUserDTO(user);
+    const user = await User.findById(userId);
+    if (!user) throw new NotFoundError('User not found');
+    return user;
   },
 
   async updateProfile(userId, data) {
-    const user = await UserRepository.findByIdAndUpdate(userId, data);
-    return toUserDTO(user);
+    const user = await User.findByIdAndUpdate(userId, data, { new: true, runValidators: true });
+    if (!user) throw new NotFoundError('User not found');
+    return user;
   },
 };
 

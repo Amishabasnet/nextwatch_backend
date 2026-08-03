@@ -1,14 +1,15 @@
 const toUserDTO = (user) => ({
-  id: user._id,
-  name: user.name,
-  email: user.email,
+  id:           user._id,
+  name:         user.name,
+  email:        user.email,
   consentGiven: user.consentGiven,
-  role: user.role,
-  createdAt: user.createdAt,
+  role:         user.role,
+  createdAt:    user.createdAt,
 });
 
-const toAuthResponseDTO = (user, token) => ({
+const toAuthResponseDTO = (user, token, refreshToken = null) => ({
   token,
+  ...(refreshToken && { refreshToken }),
   user: toUserDTO(user),
 });
 

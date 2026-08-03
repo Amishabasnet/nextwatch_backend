@@ -40,23 +40,20 @@ const MovieController = {
     try {
       const { q, title, keyword, genre, mood, rating, releaseYear, language } = req.query;
 
-      // If only a plain `q` param is sent (old behaviour), use text search
-      const hasAdvancedFilters = title || keyword || genre || mood || rating || releaseYear || language;
-
-      let result;
-      if (hasAdvancedFilters) {
-        result = await MovieService.searchMoviesWithFilters({
-          title: title || q,
-          keyword,
-          genre,
-          mood,
-          rating,
-          releaseYear,
-          language,
-        });
-      } else {
-        result = await MovieService.searchMovies(q || '');
-      }
+      // Always use the regex-based filter search. This is more forgiving
+      // (partial, case-insensitive matches) and doesn't depend on a MongoDB
+      // text index existing on the movies collection, unlike the old
+      // $text-based path which silently returned nothing if the index
+      // wasn't built.
+      const result = await MovieService.searchMoviesWithFilters({
+        title: title || q,
+        keyword,
+        genre,
+        mood,
+        rating,
+        releaseYear,
+        language,
+      });
 
       res.status(200).json(apiResponse(true, 'Search results', result));
     } catch (error) {

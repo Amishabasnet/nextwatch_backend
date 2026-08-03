@@ -10,13 +10,13 @@ const {
 
 const router = express.Router();
 
-// Public routes
 router.post('/register', ...registerValidator, validate, AuthController.register);
-router.post('/login', ...loginValidator, validate, AuthController.login);
+router.post('/login',    ...loginValidator,    validate, AuthController.login);
 
+router.post('/refresh', AuthController.refresh);
 
-// Protected routes
-router.get('/profile', authenticate, AuthController.getProfile);
-router.put('/profile', authenticate, ...updateProfileValidator, validate, AuthController.updateProfile);
+router.get ('/profile', authenticate, AuthController.getProfile);
+router.put ('/profile', authenticate, ...updateProfileValidator, validate, AuthController.updateProfile);
+router.post('/logout',  authenticate, AuthController.logout);
 
 module.exports = router;
