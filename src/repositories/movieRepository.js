@@ -1,5 +1,12 @@
 const Movie = require('../models/Movie');
 
+// User-typed search terms can contain regex metacharacters (\, (, *, [, etc.)
+// which crash MongoDB's $regex with "Regular expression is invalid" if used
+// unescaped. Escape them so search always treats the input as a literal string.
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const MovieRepository = {
   async create(data) {
     return Movie.create(data);
@@ -28,23 +35,23 @@ const MovieRepository = {
 
     // Title — case-insensitive regex
     if (title && title.trim()) {
-      filter.title = { $regex: title.trim(), $options: 'i' };
+      filter.title = { $regex: escapeRegex(title.trim()), $options: 'i' };
     }
 
     // Keyword — search in title + description
     if (keyword && keyword.trim()) {
-      const kw = { $regex: keyword.trim(), $options: 'i' };
+      const kw = { $regex: escapeRegex(keyword.trim()), $options: 'i' };
       andClauses.push({ $or: [{ title: kw }, { description: kw }] });
     }
 
     // Genre — match inside genres array (case-insensitive)
     if (genre && genre.trim()) {
-      filter.genres = { $regex: new RegExp(`^${genre.trim()}$`, 'i') };
+      filter.genres = { $regex: new RegExp(`^${escapeRegex(genre.trim())}$`, 'i') };
     }
 
     // Mood — match inside moods array (case-insensitive)
     if (mood && mood.trim()) {
-      filter.moods = { $regex: new RegExp(`^${mood.trim()}$`, 'i') };
+      filter.moods = { $regex: new RegExp(`^${escapeRegex(mood.trim())}$`, 'i') };
     }
 
     // Minimum rating
@@ -59,7 +66,7 @@ const MovieRepository = {
 
     // Language — case-insensitive exact match
     if (language && language.trim()) {
-      filter.language = { $regex: new RegExp(`^${language.trim()}$`, 'i') };
+      filter.language = { $regex: new RegExp(`^${escapeRegex(language.trim())}$`, 'i') };
     }
 
     if (andClauses.length > 0) {

@@ -1,6 +1,6 @@
 const toRatingDTO = (rating) => ({
   id: rating._id,
-  userId: rating.userId,
+  userId: rating.userId?._id ?? rating.userId,
   movieId: rating.movieId,
   rating: rating.rating,
   liked: rating.liked,
@@ -24,13 +24,18 @@ const toMovieRatingsSummaryDTO = (ratings) => {
   }
 
   const total = ratings.length;
-  const average = ratings.reduce((sum, r) => sum + r.rating, 0) / total;
+  // Only average the ratings that actually carry a star score — a rating
+  // document can now exist purely to hold a favorite (liked/disliked) flag.
+  const scored = ratings.filter((r) => r.rating != null);
+  const average = scored.length
+    ? scored.reduce((sum, r) => sum + r.rating, 0) / scored.length
+    : null;
   const likedCount = ratings.filter((r) => r.liked).length;
   const dislikedCount = ratings.filter((r) => r.disliked).length;
 
   return {
     totalRatings: total,
-    averageRating: Math.round(average * 10) / 10,
+    averageRating: average != null ? Math.round(average * 10) / 10 : null,
     likedCount,
     dislikedCount,
     ratings: toRatingListDTO(ratings),

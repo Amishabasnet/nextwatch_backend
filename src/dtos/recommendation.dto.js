@@ -60,9 +60,42 @@ const toFallbackRecommendationsDTO = (movies, fallbackReason) => ({
   })),
 });
 
+// A single scored candidate -> the movie shape the frontend's
+// normalizeMovie()/normalizeRecommendations() expects.
+const toScoredMovieDTO = ({ movie, score, reason }) => ({
+  movieId: movie._id ?? movie.movieId,
+  title: movie.title,
+  description: movie.description,
+  genres: movie.genres ?? [],
+  contentType: movie.contentType ?? 'movie',
+  rating: movie.rating,
+  releaseYear: movie.releaseYear,
+  language: movie.language,
+  posterUrl: movie.posterUrl ?? null,
+  trailerUrl: movie.trailerUrl,
+  imdbId: movie.imdbId,
+  averageScore: movie.averageScore,
+  moods: movie.moods,
+  score: score / 100,
+  reason,
+});
+
+// Splits recommendations into the personalized / moodBased / historyBased
+// buckets the dashboard renders as separate rows. `recommendations` is kept
+// for backward compatibility with any consumer still reading a flat list.
+const toBucketedRecommendationsDTO = ({ personalized, moodBased, historyBased }) => ({
+  source: 'fallback',
+  totalRecommendations: personalized.length,
+  recommendations: personalized.map(toScoredMovieDTO),
+  personalized: personalized.map(toScoredMovieDTO),
+  moodBased: moodBased.map(toScoredMovieDTO),
+  historyBased: historyBased.map(toScoredMovieDTO),
+});
+
 module.exports = {
   toRecommendationDTO,
   toRecommendationsResponseDTO,
   toFallbackRecommendationsDTO,
+  toBucketedRecommendationsDTO,
   buildReasonString,
 };
