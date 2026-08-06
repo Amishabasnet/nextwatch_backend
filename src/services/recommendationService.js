@@ -20,7 +20,14 @@ const MOOD_GENRE_MAP = {
   Nostalgic: ['Drama', 'Romance', 'Western'],
 };
 
-const ML_RECOMMEND_LIMIT = 10;
+const ML_RECOMMEND_LIMIT = 20;
+// The ML service ranks by one blended hybrid score, so asking for only
+// ML_RECOMMEND_LIMIT candidates means the mood/history buckets get filtered
+// from the exact same tiny top-N list as "personalized" — since the top
+// overall movies usually satisfy several signals at once, all three
+// sections end up showing the same titles. Fetching a wider pool first
+// gives each bucket enough distinct candidates to actually differ.
+const ML_CANDIDATE_POOL = 50;
 
 function scoreMovie(movie, context) {
   let score = 0;
@@ -165,11 +172,16 @@ function _buildMLPayload(context, limit) {
 // split the dashboard expects.
 function _bucketMLRecommendations(items, limit) {
   const personalized = items.slice(0, limit);
-  const moodBased = items.filter((i) => i.signals?.matches_mood).slice(0, limit);
+  const personalizedIds = new Set(personalized.map((i) => String(i.movie_id ?? i.movieId ?? i.id)));
+
+  const moodBased = items
+    .filter((i) => i.signals?.matches_mood && !personalizedIds.has(String(i.movie_id ?? i.movieId ?? i.id)))
+    .slice(0, limit);
   const historyBased = items
     .filter(
       (i) =>
-        i.signals?.matches_history || i.signals?.matches_rating || i.signals?.matches_collaborative
+        (i.signals?.matches_history || i.signals?.matches_rating || i.signals?.matches_collaborative) &&
+        !personalizedIds.has(String(i.movie_id ?? i.movieId ?? i.id))
     )
     .slice(0, limit);
 
@@ -186,7 +198,7 @@ const RecommendationService = {
     // rule-based scorer below so recommendations still work — this keeps the
     // feature resilient to the ML service being down or mid-deploy.
     try {
-      const payload = _buildMLPayload(context, limit);
+      const payload = _buildMLPayload(context, Math.max(ML_CANDIDATE_POOL, limit));
       const { data } = await mlClient.post('/ml/recommend', payload);
       const items = data?.recommendations ?? [];
 
@@ -252,12 +264,17 @@ const RecommendationService = {
       .sort((a, b) => b.score - a.score);
 
     const personalized = scoredAll.slice(0, limit);
+    const personalizedIds = new Set(personalized.map(s => String(s.movie._id ?? s.movie.id)));
 
     const moodBased = context.mood?.mood
-      ? scoredAll.filter(s => s.matchesMood).slice(0, limit)
+      ? scoredAll
+          .filter(s => s.matchesMood && !personalizedIds.has(String(s.movie._id ?? s.movie.id)))
+          .slice(0, limit)
       : [];
 
-    const historyBased = scoredAll.filter(s => s.matchesLikedTaste).slice(0, limit);
+    const historyBased = scoredAll
+      .filter(s => s.matchesLikedTaste && !personalizedIds.has(String(s.movie._id ?? s.movie.id)))
+      .slice(0, limit);
 
     return toBucketedRecommendationsDTO({ personalized, moodBased, historyBased });
   },
