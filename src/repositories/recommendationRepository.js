@@ -5,7 +5,7 @@ const RatingRepository = require('./ratingRepository');
 
 const RecommendationRepository = {
   async collectUserContext(userId) {
-    const [preferences, latestMood, historyResult, ratings, likedIds, dislikedIds] =
+    const [preferences, latestMood, historyResult, ratings, likedIds, dislikedIds, allRatingsRaw] =
       await Promise.all([
         // 1. Explicit genre / content-type preferences
         PreferenceRepository.findByUser(userId),
@@ -24,6 +24,10 @@ const RecommendationRepository = {
 
         // 6. Disliked movie IDs (to exclude from results)
         RatingRepository.getDislikedMovieIds(userId),
+
+        // 7. Platform-wide ratings, for the ML service's collaborative
+        //    filtering signal (needs other users' ratings, not just this user's)
+        RatingRepository.findAllRatingsForCF(),
       ]);
 
     // Genre preferences
@@ -66,6 +70,16 @@ const RecommendationRepository = {
     const likedMovieIds = likedIds.map((id) => id.toString());
     const dislikedMovieIds = dislikedIds.map((id) => id.toString());
 
+    // Platform-wide ratings -> flat (user_id, movie_id, rating) triples for
+    // the ML service's collaborative filtering model
+    const allRatings = allRatingsRaw
+      .filter((r) => r.rating != null)
+      .map((r) => ({
+        userId: r.userId.toString(),
+        movieId: r.movieId.toString(),
+        rating: r.rating,
+      }));
+
     return {
       userId: userId.toString(),
       preferences: {
@@ -79,6 +93,7 @@ const RecommendationRepository = {
       ratings: ratingData,
       likedMovieIds,
       dislikedMovieIds,
+      allRatings,
     };
   },
 };

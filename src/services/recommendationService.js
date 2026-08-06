@@ -1,9 +1,11 @@
 const RecommendationRepository = require('../repositories/recommendationRepository');
 const MovieRepository           = require('../repositories/movieRepository');
+const mlClient = require('../config/mlClient');
 const {
   toRecommendationsResponseDTO,
   toFallbackRecommendationsDTO,
   toBucketedRecommendationsDTO,
+  toBucketedMLRecommendationsDTO,
 } = require('../dtos/recommendation.dto');
 
 const MOOD_GENRE_MAP = {
@@ -18,7 +20,14 @@ const MOOD_GENRE_MAP = {
   Nostalgic: ['Drama', 'Romance', 'Western'],
 };
 
-const ML_RECOMMEND_LIMIT = 10;
+const ML_RECOMMEND_LIMIT = 20;
+// The ML service ranks by one blended hybrid score, so asking for only
+// ML_RECOMMEND_LIMIT candidates means the mood/history buckets get filtered
+// from the exact same tiny top-N list as "personalized" — since the top
+// overall movies usually satisfy several signals at once, all three
+// sections end up showing the same titles. Fetching a wider pool first
+// gives each bucket enough distinct candidates to actually differ.
+const ML_CANDIDATE_POOL = 50;
 
 function scoreMovie(movie, context) {
   let score = 0;
@@ -110,10 +119,105 @@ function scoreMovie(movie, context) {
   return { movie, score: Math.max(0, score), reason: reasons[0], matchesMood, matchesLikedTaste };
 }
 
+// Builds the request body for POST /ml/recommend. Nested objects
+// (mood, viewing_history items, ratings items, all_ratings items) must
+// use snake_case field names exactly — the Python schema only defines
+// aliases on the top-level fields, not on nested models.
+function _buildMLPayload(context, limit) {
+  return {
+    userId: context.userId,
+    mood: context.mood
+      ? {
+          mood: context.mood.mood,
+          suggested_genres: context.mood.suggestedGenres ?? [],
+          logged_at: context.mood.loggedAt,
+        }
+      : null,
+    favoriteGenres: context.preferences?.favoriteGenres ?? [],
+    excludedGenres: context.preferences?.excludedGenres ?? [],
+    preferredContentTypes: context.preferences?.preferredContentTypes ?? [],
+    preferredLanguages: context.preferences?.preferredLanguages ?? [],
+    viewingHistory: (context.viewingHistory ?? []).map((h) => ({
+      movie_id: h.movieId ? String(h.movieId) : null,
+      title: h.title,
+      genres: h.genres ?? [],
+      release_year: h.releaseYear,
+      watched_at: h.watchedAt,
+      completed: h.completed,
+    })),
+    ratings: (context.ratings ?? [])
+      .filter((r) => r.rating != null)
+      .map((r) => ({
+        movie_id: r.movieId ? String(r.movieId) : null,
+        title: r.title,
+        genres: r.genres ?? [],
+        rating: r.rating,
+        liked: !!r.liked,
+        disliked: !!r.disliked,
+        feedback_text: r.feedbackText ?? null,
+      })),
+    likedMovieIds: context.likedMovieIds ?? [],
+    dislikedMovieIds: context.dislikedMovieIds ?? [],
+    allRatings: (context.allRatings ?? []).map((r) => ({
+      user_id: r.userId,
+      movie_id: r.movieId,
+      rating: r.rating,
+    })),
+    limit,
+  };
+}
+
+// Buckets the flat ML response by which signal(s) drove each
+// recommendation, mirroring the personalized/moodBased/historyBased
+// split the dashboard expects.
+function _bucketMLRecommendations(items, limit) {
+  const personalized = items.slice(0, limit);
+  const personalizedIds = new Set(personalized.map((i) => String(i.movie_id ?? i.movieId ?? i.id)));
+
+  const moodBased = items
+    .filter((i) => i.signals?.matches_mood && !personalizedIds.has(String(i.movie_id ?? i.movieId ?? i.id)))
+    .slice(0, limit);
+  const historyBased = items
+    .filter(
+      (i) =>
+        (i.signals?.matches_history || i.signals?.matches_rating || i.signals?.matches_collaborative) &&
+        !personalizedIds.has(String(i.movie_id ?? i.movieId ?? i.id))
+    )
+    .slice(0, limit);
+
+  return { personalized, moodBased, historyBased };
+}
+
 const RecommendationService = {
   async getRecommendations(userId, limit = ML_RECOMMEND_LIMIT) {
     const context = await RecommendationRepository.collectUserContext(userId);
 
+    // Try the ML microservice first (TF-IDF content similarity + item-based
+    // collaborative filtering, blended with mood/genre/popularity signals).
+    // If it's unreachable or errors out, fall back to the simpler in-process
+    // rule-based scorer below so recommendations still work — this keeps the
+    // feature resilient to the ML service being down or mid-deploy.
+    try {
+      const payload = _buildMLPayload(context, Math.max(ML_CANDIDATE_POOL, limit));
+      const { data } = await mlClient.post('/ml/recommend', payload);
+      const items = data?.recommendations ?? [];
+
+      if (items.length > 0) {
+        const buckets = _bucketMLRecommendations(items, limit);
+        return toBucketedMLRecommendationsDTO(buckets);
+      }
+      // ML service responded but had nothing to recommend (e.g. empty
+      // catalog) — fall through to the rule-based path below.
+    } catch (err) {
+      console.error('[RecommendationService] ML service call failed, falling back:', err.message);
+    }
+
+    return this._getRuleBasedRecommendations(userId, limit, context);
+  },
+
+  // The original in-process rule-based scorer, kept as a fallback for
+  // when the ML microservice is unavailable.
+  async _getRuleBasedRecommendations(userId, limit, context) {
     let candidates;
     try {
       const favGenres = context.preferences?.favoriteGenres ?? [];
@@ -160,17 +264,19 @@ const RecommendationService = {
       .sort((a, b) => b.score - a.score);
 
     const personalized = scoredAll.slice(0, limit);
+    const personalizedIds = new Set(personalized.map(s => String(s.movie._id ?? s.movie.id)));
 
     const moodBased = context.mood?.mood
-      ? scoredAll.filter(s => s.matchesMood).slice(0, limit)
+      ? scoredAll
+          .filter(s => s.matchesMood && !personalizedIds.has(String(s.movie._id ?? s.movie.id)))
+          .slice(0, limit)
       : [];
 
-    const historyBased = scoredAll.filter(s => s.matchesLikedTaste).slice(0, limit);
+    const historyBased = scoredAll
+      .filter(s => s.matchesLikedTaste && !personalizedIds.has(String(s.movie._id ?? s.movie.id)))
+      .slice(0, limit);
 
-    return toBucketedRecommendationsDTO(
-      { personalized, moodBased, historyBased },
-      'Personalised for you'
-    );
+    return toBucketedRecommendationsDTO({ personalized, moodBased, historyBased });
   },
 };
 

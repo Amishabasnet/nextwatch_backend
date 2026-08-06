@@ -34,6 +34,20 @@ class MoodInput(BaseModel):
     suggested_genres: List[str] = Field(default_factory=list)
     logged_at: Optional[datetime] = None
 
+
+class RatingEvent(BaseModel):
+    """
+    One (user, movie, rating) data point, used to build the platform-wide
+    user-item matrix for collaborative filtering. Unlike `RatingItem`
+    (which only carries the *current* user's own ratings for the content
+    profile), this carries ratings from *all* users so item-item
+    similarity can be computed from other people's taste patterns.
+    """
+    user_id: str
+    movie_id: str
+    rating: float = Field(..., ge=1, le=10)
+
+
 class RecommendationRequest(BaseModel):
     """
     Full request payload for POST /ml/recommend.
@@ -62,6 +76,11 @@ class RecommendationRequest(BaseModel):
     liked_movie_ids: List[str] = Field(default_factory=list, alias="likedMovieIds")
     disliked_movie_ids: List[str] = Field(default_factory=list, alias="dislikedMovieIds")
 
+    # Platform-wide ratings (all users, all movies) used to build the
+    # user-item matrix for collaborative filtering. Optional so the
+    # endpoint still works (content-only) if the caller omits it.
+    all_ratings: List[RatingEvent] = Field(default_factory=list, alias="allRatings")
+
     limit: int = Field(default=10, ge=1, le=50)
 
     class Config:
@@ -81,6 +100,7 @@ class RecommendationSignals(BaseModel):
     matches_history: bool = False
     matches_rating: bool = False
     matches_watchlist: bool = False
+    matches_collaborative: bool = False
 
 
 class RecommendedMovie(BaseModel):
@@ -93,13 +113,14 @@ class RecommendedMovie(BaseModel):
     content_type: str = "movie"
     score: float = Field(..., description="ML confidence score between 0 and 1")
     reason: str
+    signals: RecommendationSignals = Field(default_factory=RecommendationSignals)
 
 
 class RecommendationResponse(BaseModel):
     user_id: str
     total_recommendations: int
     recommendations: List[RecommendedMovie]
-    model_version: str = "content-hybrid-v1"
+    model_version: str = "content-collab-hybrid-v2"
 
     class Config:
         protected_namespaces = ()

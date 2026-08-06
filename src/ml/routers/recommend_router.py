@@ -25,6 +25,9 @@ def recommend(request: RecommendationRequest) -> RecommendationResponse:
     - viewing history
     - ratings / feedback
     - movie metadata (genres, mood tags, description) via TF-IDF + cosine similarity
+    - collaborative filtering: item-item similarity from the platform-wide
+      ratings matrix (what similar users rated highly), independent of
+      movie metadata
 
     Returns a ranked list of recommended movies, each with a hybrid
     confidence score (0-1) and a human-readable recommendation reason.
