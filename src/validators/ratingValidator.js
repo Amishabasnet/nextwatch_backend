@@ -7,9 +7,10 @@ const createRatingValidator = [
     .isMongoId()
     .withMessage('movieId must be a valid ID'),
 
+  // rating is optional at creation time so the Favorite button can create
+  // a record that only carries liked/disliked, without forcing a star score.
   body('rating')
-    .notEmpty()
-    .withMessage('rating is required')
+    .optional()
     .isFloat({ min: 1, max: 10 })
     .withMessage('rating must be a number between 1 and 10'),
 
@@ -29,6 +30,14 @@ const createRatingValidator = [
     .withMessage('feedbackText must be a string')
     .isLength({ max: 1000 })
     .withMessage('feedbackText must not exceed 1000 characters'),
+
+  // At least one of rating/liked/disliked must actually be provided
+  body().custom((value) => {
+    if (value.rating === undefined && value.liked === undefined && value.disliked === undefined) {
+      throw new Error('Provide at least a rating, liked, or disliked value');
+    }
+    return true;
+  }),
 
   // Cross-field: liked and disliked cannot both be true
   body('liked').custom((liked, { req }) => {

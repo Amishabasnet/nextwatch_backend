@@ -14,9 +14,12 @@ const ratingSchema = new mongoose.Schema(
     },
     rating: {
       type: Number,
-      required: [true, 'rating is required'],
+      // Not required: a Rating document can exist purely to carry the
+      // "liked"/"disliked" favorite flag (created by the Favorite button)
+      // before the user has actually submitted a star rating.
       min: [1, 'Rating must be at least 1'],
       max: [10, 'Rating must be at most 10'],
+      default: null,
     },
     liked: {
       type: Boolean,

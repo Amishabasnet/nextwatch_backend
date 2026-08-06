@@ -3,6 +3,7 @@ const MovieRepository           = require('../repositories/movieRepository');
 const {
   toRecommendationsResponseDTO,
   toFallbackRecommendationsDTO,
+  toBucketedRecommendationsDTO,
 } = require('../dtos/recommendation.dto');
 
 const MOOD_GENRE_MAP = {
@@ -22,6 +23,8 @@ const ML_RECOMMEND_LIMIT = 10;
 function scoreMovie(movie, context) {
   let score = 0;
   const reasons = [];
+  let matchesMood = false;
+  let matchesLikedTaste = false;
 
   const {
     mood,
@@ -50,11 +53,13 @@ function scoreMovie(movie, context) {
     if (overlap.length > 0) {
       const pts = Math.min(35, overlap.length * 12);
       score += pts;
+      matchesMood = true;
       reasons.push(`Matches your ${mood.mood} mood (${overlap.join(', ')})`);
     }
     // Direct mood tag on movie
     if (Array.isArray(movie.moods) && movie.moods.includes(mood.mood)) {
       score += 10;
+      matchesMood = true;
       reasons.push(`Tagged as a ${mood.mood} film`);
     }
   }
@@ -79,6 +84,7 @@ function scoreMovie(movie, context) {
   const likedOverlap = movieGenres.filter(g => likedGenres.includes(g));
   if (likedOverlap.length > 0) {
     score += Math.min(10, likedOverlap.length * 4);
+    matchesLikedTaste = true;
     reasons.push('Similar to movies you liked');
   }
 
@@ -101,7 +107,7 @@ function scoreMovie(movie, context) {
     reasons.push('Trending in our catalogue');
   }
 
-  return { movie, score: Math.max(0, score), reason: reasons[0] };
+  return { movie, score: Math.max(0, score), reason: reasons[0], matchesMood, matchesLikedTaste };
 }
 
 const RecommendationService = {
@@ -143,32 +149,28 @@ const RecommendationService = {
       return toFallbackRecommendationsDTO([], 'No movies in the database yet.');
     }
 
-    // Score every candidate
-    const scored = candidates
+    // Score every candidate once, then bucket by which signal drove the match.
+    // Previously this only ever returned a single flat list, so the
+    // dashboard's "Because you're feeling <mood>" and "Because you enjoyed
+    // titles like these" sections always rendered empty even when a mood
+    // was set — there was nothing populating those buckets.
+    const scoredAll = candidates
       .map(movie => scoreMovie(movie, context))
       .filter(Boolean)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      .sort((a, b) => b.score - a.score);
 
-    const normalised = scored.map(({ movie, score, reason }) => ({
-      movieId: movie._id,
-      title:   movie.title,
-      description: movie.description,
-      genres:  movie.genres,
-      contentType: movie.contentType,
-      rating:  movie.rating,
-      releaseYear: movie.releaseYear,
-      language: movie.language,
-      posterUrl: movie.posterUrl,
-      trailerUrl: movie.trailerUrl,
-      imdbId:  movie.imdbId,
-      averageScore: movie.averageScore,
-      moods:   movie.moods,
-      score:   score / 100,   // normalise to 0-1
-      reason,
-    }));
+    const personalized = scoredAll.slice(0, limit);
 
-    return toFallbackRecommendationsDTO(normalised, 'Personalised for you');
+    const moodBased = context.mood?.mood
+      ? scoredAll.filter(s => s.matchesMood).slice(0, limit)
+      : [];
+
+    const historyBased = scoredAll.filter(s => s.matchesLikedTaste).slice(0, limit);
+
+    return toBucketedRecommendationsDTO(
+      { personalized, moodBased, historyBased },
+      'Personalised for you'
+    );
   },
 };
 

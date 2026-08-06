@@ -10,9 +10,27 @@ const RatingService = {
 
     const existing = await RatingRepository.findByUserAndMovie(userId, movieId);
     if (existing) {
-      throw new ConflictError(
-        'You have already rated this movie. Use PUT /api/ratings/:id to update it.'
-      );
+      // A record can already exist purely from favoriting (liked/disliked
+      // set, no star score yet). Rather than hard-failing every time two
+      // entry points (Favorite button + Rate form) touch the same
+      // user+movie pair, merge the new fields into the existing document
+      // instead of erroring — this only rejects when the caller is trying
+      // to overwrite an already-submitted star rating outright.
+      if (existing.rating != null && rating != null) {
+        throw new ConflictError(
+          'You have already rated this movie. Use PUT /api/ratings/:id to update it.'
+        );
+      }
+
+      const merged = await RatingRepository.update(existing._id, {
+        ...(rating !== undefined ? { rating } : {}),
+        ...(liked !== undefined ? { liked } : {}),
+        ...(disliked !== undefined ? { disliked } : {}),
+        ...(feedbackText !== undefined ? { feedbackText } : {}),
+      });
+
+      if (rating !== undefined) await RatingService._syncMovieScore(movieId);
+      return toRatingDTO(merged);
     }
 
     const newRating = await RatingRepository.create({
@@ -25,7 +43,7 @@ const RatingService = {
     });
 
     // Keep Movie.averageScore in sync
-    await RatingService._syncMovieScore(movieId);
+    if (rating != null) await RatingService._syncMovieScore(movieId);
 
     return toRatingDTO(newRating);
   },
