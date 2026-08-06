@@ -29,7 +29,14 @@ Signal layers (each contributes a 0-1 sub-score, then combined with weights):
    - Average content similarity between the candidate movie and movies the
      user rated highly / explicitly liked (penalizes similarity to disliked ones)
 
-6. POPULARITY PRIOR
+6. COLLABORATIVE FILTERING (item-based, ratings-matrix similarity)
+   - Ignores movie metadata entirely. Uses the platform-wide user x movie
+     ratings matrix to find movies that people with similar rating
+     patterns to this user also rated highly.
+   - See collaborative_filtering.py for the full explanation. Contributes
+     0 for a brand-new user or a movie nobody has rated yet (cold start).
+
+7. POPULARITY PRIOR
    - The movie's own average_score, scaled to 0-1, as a small tie-breaking signal
 
 Final hybrid score = weighted sum of the above, each clipped to [0, 1].
@@ -47,17 +54,19 @@ import numpy as np
 import pandas as pd
 
 from ..models.movie_catalog import catalog
-from ..schemas.recommendation_schema import RecommendationRequest, RecommendedMovie
+from ..schemas.recommendation_schema import RecommendationRequest, RecommendedMovie, RecommendationSignals
+from .collaborative_filtering import CollaborativeModel
 
 
 # ─── Tunable hybrid weights ───────────────────────────────────────────────────
 # Must sum to 1.0 for the final score to stay within [0, 1].
 WEIGHTS = {
-    "content": 0.30,
-    "mood": 0.20,
-    "genre": 0.20,
-    "history": 0.15,
+    "content": 0.25,
+    "mood": 0.15,
+    "genre": 0.15,
+    "history": 0.10,
     "rating": 0.10,
+    "collaborative": 0.20,
     "popularity": 0.05,
 }
 
@@ -171,6 +180,7 @@ def _build_reason(
     matches_genre: bool,
     matches_history: bool,
     matches_rating: bool,
+    matches_collaborative: bool,
 ) -> str:
     parts = []
     if matches_mood:
@@ -181,6 +191,8 @@ def _build_reason(
         parts.append("your viewing history")
     if matches_rating:
         parts.append("movies you've rated highly")
+    if matches_collaborative:
+        parts.append("users with similar taste to yours")
 
     if not parts:
         return "Recommended based on overall popularity and catalog trends."
@@ -216,6 +228,28 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
         # No signal at all -> neutral content score for every movie
         content_scores = np.zeros(len(catalog.df))
 
+    # ── Collaborative filtering: build the ratings-matrix model once ──────────
+    # This only uses (user_id, movie_id, rating) triples across the whole
+    # platform - no movie metadata at all - so it can surface completely
+    # different recommendations than the content-based signals above.
+    collab_model = CollaborativeModel(request.all_ratings)
+
+    known_ratings: dict[str, float] = {}
+    for r in request.ratings:
+        if r.movie_id and r.rating:
+            known_ratings[r.movie_id] = r.rating
+    # Treat explicit likes/dislikes without a star rating as pseudo-ratings
+    # so they still feed the collaborative model.
+    for mid in request.liked_movie_ids:
+        known_ratings.setdefault(mid, 9.0)
+    for mid in request.disliked_movie_ids:
+        known_ratings.setdefault(mid, 2.0)
+
+    candidate_ids = [
+        row["movie_id"] for _, row in catalog.df.iterrows() if row["movie_id"] not in already_seen_ids
+    ]
+    collab_scores = collab_model.predict_scores(request.user_id, known_ratings, candidate_ids)
+
     results: list[tuple[float, RecommendedMovie]] = []
 
     for idx, row in catalog.df.iterrows():
@@ -235,6 +269,7 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
         genre_score = _genre_match_score(row["genres"], request.favorite_genres)
         history_score = _average_similarity_to_set(idx, history_ids)
         rating_score = _average_similarity_to_set(idx, liked_ids)
+        collab_score = collab_scores.get(movie_id, 0.0)
         popularity_score = _popularity_score(row["average_score"])
 
         hybrid_score = (
@@ -243,6 +278,7 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
             + WEIGHTS["genre"] * genre_score
             + WEIGHTS["history"] * history_score
             + WEIGHTS["rating"] * rating_score
+            + WEIGHTS["collaborative"] * collab_score
             + WEIGHTS["popularity"] * popularity_score
         )
         hybrid_score = round(float(np.clip(hybrid_score, 0.0, 1.0)), 4)
@@ -252,8 +288,11 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
         matches_genre = genre_score > 0.0
         matches_history = history_score >= 0.15
         matches_rating = rating_score >= 0.15
+        matches_collaborative = collab_score >= 0.6  # predicted rating ~6+/10
 
-        reason = _build_reason(matches_mood, matches_genre, matches_history, matches_rating)
+        reason = _build_reason(
+            matches_mood, matches_genre, matches_history, matches_rating, matches_collaborative
+        )
 
         recommended = RecommendedMovie(
             movie_id=movie_id,
@@ -265,6 +304,13 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
             content_type=row["content_type"],
             score=hybrid_score,
             reason=reason,
+            signals=RecommendationSignals(
+                matches_mood=matches_mood,
+                matches_genre=matches_genre,
+                matches_history=matches_history,
+                matches_rating=matches_rating,
+                matches_collaborative=matches_collaborative,
+            ),
         )
         results.append((hybrid_score, recommended))
 
