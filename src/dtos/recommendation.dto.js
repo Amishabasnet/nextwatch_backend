@@ -80,11 +80,36 @@ const toScoredMovieDTO = ({ movie, score, reason }) => ({
   reason,
 });
 
+// A single scored candidate from the ML service -> the movie shape the
+// frontend's normalizeMovie()/normalizeRecommendations() expects. The ML
+// response is thinner than a full Mongo movie doc (no description,
+// language, trailer, etc.) since the Python service only knows about its
+// own mock catalog fields — that's fine, the dashboard cards only render
+// what's mapped here.
+const fromMLRecommendation = (item) => ({
+  movieId: item.movie_id,
+  title: item.title,
+  description: null,
+  genres: item.genres ?? [],
+  contentType: item.content_type ?? 'movie',
+  rating: item.rating,
+  releaseYear: item.release_year,
+  language: null,
+  posterUrl: item.poster_url ?? null,
+  trailerUrl: null,
+  imdbId: null,
+  averageScore: item.rating,
+  moods: [],
+  score: item.score, // already 0-1 from the ML service
+  reason: item.reason,
+  signals: item.signals ?? {},
+});
+
 // Splits recommendations into the personalized / moodBased / historyBased
 // buckets the dashboard renders as separate rows. `recommendations` is kept
 // for backward compatibility with any consumer still reading a flat list.
-const toBucketedRecommendationsDTO = ({ personalized, moodBased, historyBased }) => ({
-  source: 'fallback',
+const toBucketedRecommendationsDTO = ({ personalized, moodBased, historyBased }, source = 'fallback') => ({
+  source,
   totalRecommendations: personalized.length,
   recommendations: personalized.map(toScoredMovieDTO),
   personalized: personalized.map(toScoredMovieDTO),
@@ -92,10 +117,24 @@ const toBucketedRecommendationsDTO = ({ personalized, moodBased, historyBased })
   historyBased: historyBased.map(toScoredMovieDTO),
 });
 
+// Same bucketing, but for results that already came back from the ML
+// service in RecommendedMovie shape (snake_case fields, score 0-1, no
+// `movie` wrapper) instead of the {movie, score, reason} shape the
+// JS rule-based scorer produces.
+const toBucketedMLRecommendationsDTO = ({ personalized, moodBased, historyBased }) => ({
+  source: 'ml',
+  totalRecommendations: personalized.length,
+  recommendations: personalized.map(fromMLRecommendation),
+  personalized: personalized.map(fromMLRecommendation),
+  moodBased: moodBased.map(fromMLRecommendation),
+  historyBased: historyBased.map(fromMLRecommendation),
+});
+
 module.exports = {
   toRecommendationDTO,
   toRecommendationsResponseDTO,
   toFallbackRecommendationsDTO,
   toBucketedRecommendationsDTO,
+  toBucketedMLRecommendationsDTO,
   buildReasonString,
 };

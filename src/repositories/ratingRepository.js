@@ -60,6 +60,18 @@ const RatingRepository = {
       .populate('movieId', 'genres moods')
       .select('movieId rating');
   },
+
+  // Platform-wide (user_id, movie_id, rating) triples for every user,
+  // used to build the collaborative-filtering user-item matrix. Only
+  // ratings with a numeric score matter here — a bare "liked"/"disliked"
+  // flag with no star rating isn't useful for item-item similarity, and
+  // the ML service already synthesizes pseudo-ratings for those from the
+  // current user's own likedMovieIds/dislikedMovieIds.
+  async findAllRatingsForCF() {
+    return Rating.find({ rating: { $ne: null, $exists: true } })
+      .select('userId movieId rating')
+      .lean();
+  },
 };
 
 module.exports = RatingRepository;
