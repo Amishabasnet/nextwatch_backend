@@ -22,15 +22,26 @@ const MovieController = {
 
   async getAllMovies(req, res, next) {
     try {
-      const { page = 1, limit = 10, genre, contentType, language } = req.query;
+      const { page = 1, limit = 10, genre, contentType, language, sort } = req.query;
       const result = await MovieService.getAllMovies({
         page: Number(page),
         limit: Number(limit),
         genre,
         contentType,
         language,
+        sort,
       });
       res.status(200).json(apiResponse(true, 'Movies fetched', result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async getTopRated(req, res, next) {
+    try {
+      const { limit = 10 } = req.query;
+      const result = await MovieService.getTopRatedMovies(Number(limit));
+      res.status(200).json(apiResponse(true, 'Top rated movies fetched', result));
     } catch (error) {
       next(error);
     }

@@ -10,6 +10,7 @@ const router = express.Router();
 // Public
 router.get('/',               MovieController.getAllMovies);
 router.get('/search',         MovieController.searchMovies);
+router.get('/top-rated',      MovieController.getTopRated);
 router.get('/by-mood/:mood',  MovieController.getByMood);
 router.get('/:id',            MovieController.getMovieById);
 
