@@ -105,8 +105,10 @@ function scoreMovie(movie, context) {
   const prefLangs  = preferences.preferredLanguages  ?? [];
   const prefTypes  = preferences.preferredContentTypes ?? [];
 
-  if (prefLangs.length > 0 && prefLangs.includes(movie.language)) {
+  const normalizedPrefLangs = prefLangs.map(l => String(l).toLowerCase());
+  if (normalizedPrefLangs.length > 0 && movie.language && normalizedPrefLangs.includes(String(movie.language).toLowerCase())) {
     score += 5;
+    reasons.push('In your preferred language');
   }
   if (prefTypes.length > 0 && prefTypes.includes(movie.contentType)) {
     score += 5;
