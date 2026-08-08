@@ -96,6 +96,21 @@ const AuthService = {
     if (!user) throw new NotFoundError('User not found');
     return user;
   },
+
+  async changePassword(userId, { currentPassword, newPassword }) {
+    const user = await User.findById(userId).select('+password +refreshTokens');
+    if (!user) throw new NotFoundError('User not found');
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) throw new UnauthorizedError('Current password is incorrect');
+
+    user.password = newPassword; // hashed by the pre('save') hook
+    // Invalidate every other logged-in session for this account
+    user.refreshTokens = [];
+    await user.save();
+
+    return { message: 'Password updated. Please log in again on other devices.' };
+  },
 };
 
 module.exports = AuthService;
