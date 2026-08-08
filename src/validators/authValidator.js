@@ -28,6 +28,24 @@ const updateProfileValidator = [
     .isEmail()
     .withMessage('Valid email is required')
     .normalizeEmail(),
+  body('phone')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^[+]?[\d\s()-]{7,15}$/)
+    .withMessage('Enter a valid phone number'),
 ];
 
-module.exports = { registerValidator, loginValidator, updateProfileValidator };
+const changePasswordValidator = [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('New password must be at least 6 characters'),
+  body('newPassword').custom((value, { req }) => {
+    if (value === req.body.currentPassword) {
+      throw new Error('New password must be different from current password');
+    }
+    return true;
+  }),
+];
+
+module.exports = { registerValidator, loginValidator, updateProfileValidator, changePasswordValidator };

@@ -51,9 +51,19 @@ const AuthController = {
 
   async updateProfile(req, res, next) {
     try {
-      const { name, email } = req.body;
-      const result = await AuthService.updateProfile(req.user._id, { name, email });
+      const { name, email, phone } = req.body;
+      const result = await AuthService.updateProfile(req.user._id, { name, email, phone });
       res.status(200).json(apiResponse(true, 'Profile updated', result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async changePassword(req, res, next) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const result = await AuthService.changePassword(req.user._id, { currentPassword, newPassword });
+      res.status(200).json(apiResponse(true, 'Password updated successfully', result));
     } catch (error) {
       next(error);
     }

@@ -1,8 +1,5 @@
 const Movie = require('../models/Movie');
 
-// User-typed search terms can contain regex metacharacters (\, (, *, [, etc.)
-// which crash MongoDB's $regex with "Regular expression is invalid" if used
-// unescaped. Escape them so search always treats the input as a literal string.
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -16,13 +13,20 @@ const MovieRepository = {
     return Movie.findById(id);
   },
 
-  async findAll({ page = 1, limit = 10, filters = {} } = {}) {
+  async findAll({ page = 1, limit = 10, filters = {}, sort = 'createdAt' } = {}) {
     const skip = (page - 1) * limit;
+    const sortSpec = sort === 'rating' ? { averageScore: -1 } : { createdAt: -1 };
     const [movies, total] = await Promise.all([
-      Movie.find(filters).skip(skip).limit(limit).sort({ createdAt: -1 }),
+      Movie.find(filters).sort(sortSpec).skip(skip).limit(limit),
       Movie.countDocuments(filters),
     ]);
     return { movies, total };
+  },
+
+  // Top N movies platform-wide, ranked purely by average rating — powers
+  // the Netflix/Prime-style "Top 10" row on the dashboard.
+  async findTopRated(limit = 10) {
+    return Movie.find({}).sort({ averageScore: -1 }).limit(limit);
   },
 
   async search(query) {

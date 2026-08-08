@@ -16,17 +16,22 @@ const MovieService = {
     return toMovieDTO(movie);
   },
 
-  async getAllMovies({ page = 1, limit = 10, genre, contentType, language } = {}) {
+  async getAllMovies({ page = 1, limit = 10, genre, contentType, language, sort } = {}) {
     const filters = {};
     if (genre) filters.genres = genre;
     if (contentType) filters.contentType = contentType;
     if (language) filters.language = language;
 
-    const { movies, total } = await MovieRepository.findAll({ page, limit, filters });
+    const { movies, total } = await MovieRepository.findAll({ page, limit, filters, sort });
     return {
       movies: toMovieListDTO(movies),
       meta: paginationMeta(page, limit, total),
     };
+  },
+
+  async getTopRatedMovies(limit = 10) {
+    const movies = await MovieRepository.findTopRated(limit);
+    return toMovieListDTO(movies);
   },
 
   async searchMovies(query) {
