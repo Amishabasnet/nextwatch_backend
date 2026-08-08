@@ -1,10 +1,21 @@
 const express = require('express');
 const AdminDashboardController = require('../controllers/adminDashboardController');
+const AdminUserController = require('../controllers/adminUserController');
 const { authenticate } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
+const { validate } = require('../middleware/validate');
+const { updateRoleValidator, updateStatusValidator } = require('../validators/adminUserValidator');
 
 const router = express.Router();
 
-router.get('/dashboard', authenticate, authorize('admin'), AdminDashboardController.getDashboard);
+router.use(authenticate, authorize('admin'));
+
+router.get('/dashboard', AdminDashboardController.getDashboard);
+
+router.get   ('/users',            AdminUserController.getAllUsers);
+router.get   ('/users/:id',        AdminUserController.getUserById);
+router.patch ('/users/:id/role',   ...updateRoleValidator,   validate, AdminUserController.updateRole);
+router.patch ('/users/:id/status', ...updateStatusValidator, validate, AdminUserController.updateStatus);
+router.delete('/users/:id',        AdminUserController.deleteUser);
 
 module.exports = router;

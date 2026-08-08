@@ -28,6 +28,10 @@ const AuthService = {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) throw new UnauthorizedError('Invalid email or password');
 
+    if (user.status === 'suspended') {
+      throw new UnauthorizedError('This account has been suspended. Contact support for help.');
+    }
+
     const token        = generateToken({ id: user._id });
     const refreshToken = generateRefreshToken({ id: user._id });
 
