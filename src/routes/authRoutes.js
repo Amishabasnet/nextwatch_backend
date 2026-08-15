@@ -7,6 +7,8 @@ const {
   loginValidator,
   updateProfileValidator,
   changePasswordValidator,
+  forgotPasswordValidator,
+  resetPasswordValidator,
 } = require('../validators/authValidator');
 
 const router = express.Router();
@@ -15,6 +17,9 @@ router.post('/register', ...registerValidator, validate, AuthController.register
 router.post('/login',    ...loginValidator,    validate, AuthController.login);
 
 router.post('/refresh', AuthController.refresh);
+
+router.post('/forgot-password', ...forgotPasswordValidator, validate, AuthController.forgotPassword);
+router.post('/reset-password',  ...resetPasswordValidator,  validate, AuthController.resetPassword);
 
 router.get ('/profile',  authenticate, AuthController.getProfile);
 router.put ('/profile',  authenticate, ...updateProfileValidator, validate, AuthController.updateProfile);
