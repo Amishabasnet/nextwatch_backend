@@ -1,7 +1,7 @@
 const User = require('../models/User');
-const { generateToken, generateRefreshToken } = require('../config/jwt');
+const { generateToken, generateRefreshToken, generateResetToken, verifyResetToken } = require('../config/jwt');
 const { toAuthResponseDTO } = require('../dtos/auth.dto');
-const { NotFoundError, UnauthorizedError } = require('../errors/AppError');
+const { NotFoundError, UnauthorizedError } = require('../errors/appError');
 
 const AuthService = {
   async register({ name, email, phone = '', password, consentGiven = false }) {
@@ -114,6 +114,57 @@ const AuthService = {
     await user.save();
 
     return { message: 'Password updated. Please log in again on other devices.' };
+  },
+
+  // Step 1 of the reset flow — always resolves with a generic success
+  // message regardless of whether the email exists, so callers can't use
+  // this endpoint to enumerate registered accounts. If the user *is* found,
+  // a short-lived signed token is generated and (in place of a real email
+  // provider) logged to the server console / returned in non-production
+  // environments so the flow can be exercised end-to-end during development.
+  async forgotPassword(email) {
+    const user = await User.findOne({ email }).select('+password');
+    const genericResult = { message: 'If an account exists for that email, a reset link has been sent.' };
+    if (!user) return genericResult;
+
+    const pwdSig = user.password.slice(-10);
+    const resetToken = generateResetToken({ id: user._id, pwdSig });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    // TODO: wire up a real email provider (e.g. Nodemailer/SendGrid) and
+    // send `resetLink` to `user.email` instead of logging it.
+    console.log(`[password reset] ${user.email} -> ${resetLink}`);
+
+    if (process.env.NODE_ENV !== 'production') {
+      return { ...genericResult, resetToken, resetLink };
+    }
+    return genericResult;
+  },
+
+  // Step 2 — verify the token, confirm it still matches the account's
+  // current password hash (i.e. hasn't already been used), then save.
+  async resetPassword(token, newPassword) {
+    let payload;
+    try {
+      payload = verifyResetToken(token);
+    } catch {
+      throw new UnauthorizedError('This reset link is invalid or has expired.');
+    }
+
+    const user = await User.findById(payload.id).select('+password +refreshTokens');
+    if (!user) throw new NotFoundError('User not found');
+
+    if (user.password.slice(-10) !== payload.pwdSig) {
+      throw new UnauthorizedError('This reset link has already been used. Please request a new one.');
+    }
+
+    user.password = newPassword; // hashed by the pre('save') hook
+    user.refreshTokens = []; // log out every existing session
+    await user.save();
+
+    return { message: 'Password reset successfully. You can now log in with your new password.' };
   },
 };
 
