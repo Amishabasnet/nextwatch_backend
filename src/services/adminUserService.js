@@ -34,8 +34,9 @@ const AdminUserService = {
 
   async getAllUsers({ page = 1, limit = 20, search, role, status } = {}) {
     const { users, total } = await UserRepository.findAllAdmin({ page, limit, search, role, status });
+    const screenTimeMap = await HistoryRepository.getScreenTimeForUsers(users.map((u) => u._id));
     return {
-      users: toAdminUserListDTO(users),
+      users: toAdminUserListDTO(users, screenTimeMap),
       meta: paginationMeta(page, limit, total),
     };
   },
@@ -43,7 +44,8 @@ const AdminUserService = {
   async getUserById(id) {
     const user = await UserRepository.findById(id);
     if (!user) throw new NotFoundError('User not found');
-    return toAdminUserDTO(user);
+    const screenTimeMap = await HistoryRepository.getScreenTimeForUsers([user._id]);
+    return toAdminUserDTO(user, screenTimeMap[String(user._id)] || {});
   },
 
   async updateRole(actingAdminId, targetUserId, role) {
