@@ -7,9 +7,31 @@ const Watchlist = require('../models/Watchlist');
 const Mood = require('../models/Mood');
 const { toAdminUserDTO, toAdminUserListDTO } = require('../dtos/adminUser.dto');
 const { paginationMeta } = require('../types/express.types');
-const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
+const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../errors/AppError');
 
 const AdminUserService = {
+  // Lets an existing admin create a brand-new user who is already an admin,
+  // instead of registering normally and then being promoted. Goes straight
+  // through UserRepository.create (not AuthService.register) so it never
+  // touches refresh tokens / auto-login — the new admin logs in themselves.
+  async createAdmin({ name, email, phone = '', password }) {
+    const existing = await UserRepository.findByEmail(email);
+    if (existing) throw new ConflictError('Email already in use');
+
+    const user = await UserRepository.create({
+      name,
+      email,
+      phone,
+      password,
+      role: 'admin',
+      status: 'active',
+      consentGiven: true,
+      consentDate: new Date(),
+    });
+
+    return toAdminUserDTO(user);
+  },
+
   async getAllUsers({ page = 1, limit = 20, search, role, status } = {}) {
     const { users, total } = await UserRepository.findAllAdmin({ page, limit, search, role, status });
     return {

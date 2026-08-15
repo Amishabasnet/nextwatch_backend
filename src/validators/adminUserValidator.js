@@ -8,4 +8,17 @@ const updateStatusValidator = [
   body('status').isIn(['active', 'suspended']).withMessage('status must be either "active" or "suspended"'),
 ];
 
-module.exports = { updateRoleValidator, updateStatusValidator };
+const createAdminValidator = [
+  body('name').trim().notEmpty().withMessage('Name is required'),
+  body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('phone')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^[+]?[\d\s()-]{7,15}$/)
+    .withMessage('Enter a valid phone number'),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
+];
+
+module.exports = { updateRoleValidator, updateStatusValidator, createAdminValidator };
