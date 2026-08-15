@@ -45,6 +45,43 @@ const HistoryRepository = {
   async clearAll(userId) {
     return History.deleteMany({ user: userId });
   },
+
+  // Sums each user's watched-movie runtime (minutes) to approximate "screen
+  // time". Scoped to a specific set of userIds (e.g. the current admin-panel
+  // page) so this stays a single cheap aggregation rather than scanning the
+  // whole History collection. Only counts completed watches.
+  async getScreenTimeForUsers(userIds) {
+    if (!userIds || userIds.length === 0) return {};
+
+    const results = await History.aggregate([
+      { $match: { user: { $in: userIds }, completed: true } },
+      {
+        $lookup: {
+          from: 'movies',
+          localField: 'movie',
+          foreignField: '_id',
+          as: 'movieDetails',
+        },
+      },
+      { $unwind: '$movieDetails' },
+      {
+        $group: {
+          _id: '$user',
+          totalMinutes: { $sum: { $ifNull: ['$movieDetails.runtimeMinutes', 0] } },
+          moviesWatched: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const map = {};
+    results.forEach((r) => {
+      map[String(r._id)] = {
+        screenTimeMinutes: r.totalMinutes,
+        moviesWatched: r.moviesWatched,
+      };
+    });
+    return map;
+  },
 };
 
 module.exports = HistoryRepository;

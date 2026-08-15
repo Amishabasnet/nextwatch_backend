@@ -32,6 +32,11 @@ const createMovieValidator = [
     .optional()
     .isFloat({ min: 0, max: 10 })
     .withMessage('averageScore must be between 0 and 10'),
+
+  body('runtimeMinutes')
+    .optional()
+    .isInt({ min: 0, max: 1000 })
+    .withMessage('runtimeMinutes must be a positive number of minutes'),
 ];
 
 const updateMovieValidator = createMovieValidator.map((v) => v.optional());

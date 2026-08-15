@@ -2,6 +2,16 @@ const AdminUserService = require('../services/adminUserService');
 const { apiResponse } = require('../types/express.types');
 
 const AdminUserController = {
+  async createAdmin(req, res, next) {
+    try {
+      const { name, email, phone, password } = req.body;
+      const result = await AdminUserService.createAdmin({ name, email, phone, password });
+      res.status(201).json(apiResponse(true, 'Admin account created', result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async getAllUsers(req, res, next) {
     try {
       const { page = 1, limit = 20, search, role, status } = req.query;

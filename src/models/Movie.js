@@ -50,6 +50,11 @@ const movieSchema = new mongoose.Schema(
       min: 0,
       max: 10,
     },
+    runtimeMinutes: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     moods: {
       type: [String],
       default: [],

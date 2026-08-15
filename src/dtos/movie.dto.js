@@ -12,6 +12,7 @@ const toMovieDTO = (movie) => ({
   imdbId: movie.imdbId,
   averageScore: movie.averageScore,
   moods: movie.moods,
+  runtimeMinutes: movie.runtimeMinutes ?? 0,
   createdAt: movie.createdAt,
 });
 
