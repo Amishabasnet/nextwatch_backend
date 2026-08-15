@@ -2,6 +2,7 @@ const User = require('../models/User');
 const { generateToken, generateRefreshToken, generateResetToken, verifyResetToken } = require('../config/jwt');
 const { toAuthResponseDTO } = require('../dtos/auth.dto');
 const { NotFoundError, UnauthorizedError } = require('../errors/appError');
+const EmailService = require('./emailService');
 
 const AuthService = {
   async register({ name, email, phone = '', password, consentGiven = false }) {
@@ -119,9 +120,10 @@ const AuthService = {
   // Step 1 of the reset flow — always resolves with a generic success
   // message regardless of whether the email exists, so callers can't use
   // this endpoint to enumerate registered accounts. If the user *is* found,
-  // a short-lived signed token is generated and (in place of a real email
-  // provider) logged to the server console / returned in non-production
-  // environments so the flow can be exercised end-to-end during development.
+  // a short-lived signed token is generated and emailed via EmailService.
+  // If no SMTP provider is configured yet, we fall back to logging the link
+  // server-side and (outside production) returning it directly so the flow
+  // can still be exercised end-to-end during development.
   async forgotPassword(email) {
     const user = await User.findOne({ email }).select('+password');
     const genericResult = { message: 'If an account exists for that email, a reset link has been sent.' };
@@ -133,13 +135,23 @@ const AuthService = {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-    // TODO: wire up a real email provider (e.g. Nodemailer/SendGrid) and
-    // send `resetLink` to `user.email` instead of logging it.
-    console.log(`[password reset] ${user.email} -> ${resetLink}`);
-
-    if (process.env.NODE_ENV !== 'production') {
-      return { ...genericResult, resetToken, resetLink };
+    let emailSent = false;
+    try {
+      emailSent = await EmailService.sendPasswordResetEmail(user.email, resetLink);
+    } catch (err) {
+      // Don't fail the request just because the email provider hiccuped —
+      // log it and fall through to the dev-mode link below so the user
+      // (or you, testing) isn't stuck.
+      console.error('[password reset] email send failed:', err.message);
     }
+
+    if (!emailSent) {
+      console.log(`[password reset] ${user.email} -> ${resetLink}`);
+      if (process.env.NODE_ENV !== 'production') {
+        return { ...genericResult, resetToken, resetLink };
+      }
+    }
+
     return genericResult;
   },
 
