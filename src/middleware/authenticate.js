@@ -16,6 +16,9 @@ const authenticate = async (req, res, next) => {
     if (!user) {
       throw new UnauthorizedError('User not found');
     }
+    if (user.status === 'suspended') {
+      throw new UnauthorizedError('This account has been suspended.');
+    }
 
     req.user = user;
     next();

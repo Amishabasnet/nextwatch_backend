@@ -101,6 +101,7 @@ class RecommendationSignals(BaseModel):
     matches_rating: bool = False
     matches_watchlist: bool = False
     matches_collaborative: bool = False
+    matches_language: bool = False
 
 
 class RecommendedMovie(BaseModel):
@@ -120,7 +121,7 @@ class RecommendationResponse(BaseModel):
     user_id: str
     total_recommendations: int
     recommendations: List[RecommendedMovie]
-    model_version: str = "content-collab-hybrid-v2"
+    model_version: str = "content-collab-hybrid-v3"
 
     class Config:
         protected_namespaces = ()

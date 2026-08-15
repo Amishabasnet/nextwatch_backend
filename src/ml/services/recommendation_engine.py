@@ -39,6 +39,12 @@ Signal layers (each contributes a 0-1 sub-score, then combined with weights):
 7. POPULARITY PRIOR
    - The movie's own average_score, scaled to 0-1, as a small tie-breaking signal
 
+8. LANGUAGE MATCH
+   - Boolean match between the user's preferred_languages and the movie's
+     language. A soft signal only (never a hard filter) - a user might list
+     preferred languages but still be happy to see a great match in another
+     language, so this nudges rather than excludes.
+
 Final hybrid score = weighted sum of the above, each clipped to [0, 1].
 
 Exclusions:
@@ -61,13 +67,14 @@ from .collaborative_filtering import CollaborativeModel
 # ─── Tunable hybrid weights ───────────────────────────────────────────────────
 # Must sum to 1.0 for the final score to stay within [0, 1].
 WEIGHTS = {
-    "content": 0.25,
-    "mood": 0.15,
-    "genre": 0.15,
+    "content": 0.23,
+    "mood": 0.14,
+    "genre": 0.14,
     "history": 0.10,
     "rating": 0.10,
-    "collaborative": 0.20,
-    "popularity": 0.05,
+    "collaborative": 0.19,
+    "popularity": 0.04,
+    "language": 0.06,
 }
 
 
@@ -175,12 +182,27 @@ def _popularity_score(average_score: float) -> float:
     return max(0.0, min(1.0, average_score / 10.0))
 
 
+def _language_match_score(movie_language: Optional[str], preferred_languages: list[str]) -> float:
+    """
+    1.0 if the movie's language is in the user's preferred_languages list,
+    0.0 otherwise (including when the user hasn't set a preference, so it
+    stays neutral rather than penalizing anyone who didn't specify one).
+    Comparison is case-insensitive since ISO codes / display names can
+    arrive in either case depending on the caller.
+    """
+    if not preferred_languages or not movie_language:
+        return 0.0
+    normalized_prefs = {lang.strip().lower() for lang in preferred_languages if lang}
+    return 1.0 if movie_language.strip().lower() in normalized_prefs else 0.0
+
+
 def _build_reason(
     matches_mood: bool,
     matches_genre: bool,
     matches_history: bool,
     matches_rating: bool,
     matches_collaborative: bool,
+    matches_language: bool,
 ) -> str:
     parts = []
     if matches_mood:
@@ -193,6 +215,8 @@ def _build_reason(
         parts.append("movies you've rated highly")
     if matches_collaborative:
         parts.append("users with similar taste to yours")
+    if matches_language:
+        parts.append("your preferred language")
 
     if not parts:
         return "Recommended based on overall popularity and catalog trends."
@@ -271,6 +295,7 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
         rating_score = _average_similarity_to_set(idx, liked_ids)
         collab_score = collab_scores.get(movie_id, 0.0)
         popularity_score = _popularity_score(row["average_score"])
+        language_score = _language_match_score(row.get("language"), request.preferred_languages)
 
         hybrid_score = (
             WEIGHTS["content"] * content_score
@@ -280,6 +305,7 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
             + WEIGHTS["rating"] * rating_score
             + WEIGHTS["collaborative"] * collab_score
             + WEIGHTS["popularity"] * popularity_score
+            + WEIGHTS["language"] * language_score
         )
         hybrid_score = round(float(np.clip(hybrid_score, 0.0, 1.0)), 4)
 
@@ -289,9 +315,15 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
         matches_history = history_score >= 0.15
         matches_rating = rating_score >= 0.15
         matches_collaborative = collab_score >= 0.6  # predicted rating ~6+/10
+        matches_language = language_score >= 1.0
 
         reason = _build_reason(
-            matches_mood, matches_genre, matches_history, matches_rating, matches_collaborative
+            matches_mood,
+            matches_genre,
+            matches_history,
+            matches_rating,
+            matches_collaborative,
+            matches_language,
         )
 
         recommended = RecommendedMovie(
@@ -310,6 +342,7 @@ def generate_recommendations(request: RecommendationRequest) -> list[Recommended
                 matches_history=matches_history,
                 matches_rating=matches_rating,
                 matches_collaborative=matches_collaborative,
+                matches_language=matches_language,
             ),
         )
         results.append((hybrid_score, recommended))

@@ -1,5 +1,5 @@
 const buildReasonString = (signals = {}) => {
-  const { matchesMood, matchesGenre, matchesHistory, matchesRating, matchesWatchlist } = signals;
+  const { matchesMood, matchesGenre, matchesHistory, matchesRating, matchesWatchlist, matchesCollaborative } = signals;
 
   const parts = [];
 
@@ -8,6 +8,7 @@ const buildReasonString = (signals = {}) => {
   if (matchesHistory) parts.push('your viewing history');
   if (matchesRating) parts.push('your past ratings');
   if (matchesWatchlist) parts.push('your watchlist');
+  if (matchesCollaborative) parts.push('users with similar taste to yours');
 
   if (parts.length === 0) {
     return 'Recommended based on trending content and your profile.';
