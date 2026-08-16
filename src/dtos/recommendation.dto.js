@@ -1,5 +1,5 @@
 const buildReasonString = (signals = {}) => {
-  const { matchesMood, matchesGenre, matchesHistory, matchesRating, matchesWatchlist } = signals;
+  const { matchesMood, matchesGenre, matchesHistory, matchesRating, matchesWatchlist, matchesCollaborative } = signals;
 
   const parts = [];
 
@@ -8,6 +8,7 @@ const buildReasonString = (signals = {}) => {
   if (matchesHistory) parts.push('your viewing history');
   if (matchesRating) parts.push('your past ratings');
   if (matchesWatchlist) parts.push('your watchlist');
+  if (matchesCollaborative) parts.push('users with similar taste to yours');
 
   if (parts.length === 0) {
     return 'Recommended based on trending content and your profile.';
@@ -108,7 +109,7 @@ const fromMLRecommendation = (item) => ({
 // Splits recommendations into the personalized / moodBased / historyBased
 // buckets the dashboard renders as separate rows. `recommendations` is kept
 // for backward compatibility with any consumer still reading a flat list.
-const toBucketedRecommendationsDTO = ({ personalized, moodBased, historyBased }, source = 'fallback') => ({
+const toBucketedRecommendationsDTO = ({ personalized, moodBased, historyBased }, source = 'rule-based') => ({
   source,
   totalRecommendations: personalized.length,
   recommendations: personalized.map(toScoredMovieDTO),

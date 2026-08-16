@@ -1,6 +1,14 @@
 const RecommendationRepository = require('../repositories/recommendationRepository');
 const MovieRepository           = require('../repositories/movieRepository');
 const mlClient = require('../config/mlClient');
+const { CollaborativeModel: _CollaborativeModel } = require('./collaborativeFilteringService');
+// Defensive: support both `module.exports = { CollaborativeModel }` (current)
+// and a stray `module.exports = CollaborativeModel` from an older build, so
+// a mismatched file on disk degrades gracefully instead of throwing
+// "CollaborativeModel is not a constructor" deep inside a request.
+const CollaborativeModel = typeof _CollaborativeModel === 'function'
+  ? _CollaborativeModel
+  : require('./collaborativeFilteringService');
 const {
   toRecommendationsResponseDTO,
   toFallbackRecommendationsDTO,
@@ -34,6 +42,7 @@ function scoreMovie(movie, context) {
   const reasons = [];
   let matchesMood = false;
   let matchesLikedTaste = false;
+  let matchesCollaborative = false;
 
   const {
     mood,
@@ -42,6 +51,7 @@ function scoreMovie(movie, context) {
     ratings = [],
     likedMovieIds = [],
     dislikedMovieIds = [],
+    collabScores = {},
   } = context;
 
   const movieId = String(movie._id ?? movie.id ?? '');
@@ -114,11 +124,30 @@ function scoreMovie(movie, context) {
     score += 5;
   }
 
+  // Collaborative filtering: "users with similar taste to yours also
+  // liked this" - ignores movie metadata entirely, uses the platform-wide
+  // ratings matrix instead. Contributes 0 for a brand-new user or a movie
+  // nobody has rated yet (cold start) - the signals above carry the
+  // recommendation in that case.
+  const collabScore = collabScores[movieId] ?? 0;
+  if (collabScore >= 0.6) { // predicted rating ~6+/10
+    score += Math.round(collabScore * 20); // up to 20 pts, same order of magnitude as other signals
+    matchesCollaborative = true;
+    reasons.push('Liked by users with similar taste to yours');
+  }
+
   if (reasons.length === 0) {
     reasons.push('Trending in our catalogue');
   }
 
-  return { movie, score: Math.max(0, score), reason: reasons[0], matchesMood, matchesLikedTaste };
+  return {
+    movie,
+    score: Math.max(0, score),
+    reason: reasons[0],
+    matchesMood,
+    matchesLikedTaste,
+    matchesCollaborative,
+  };
 }
 
 // Builds the request body for POST /ml/recommend. Nested objects
@@ -191,14 +220,29 @@ function _bucketMLRecommendations(items, limit) {
 }
 
 const RecommendationService = {
-  async getRecommendations(userId, limit = ML_RECOMMEND_LIMIT) {
+  async getRecommendations(userId, limit = ML_RECOMMEND_LIMIT, moodOverride = null) {
     const context = await RecommendationRepository.collectUserContext(userId);
+
+    // Let the caller preview recommendations for a mood other than whatever
+    // is currently saved (e.g. clicking a mood chip on the recommendations
+    // page). This doesn't touch the user's stored mood — it's a per-request
+    // override so scoring/reasons reflect that mood without persisting it.
+    if (moodOverride) {
+      context.mood = {
+        mood: moodOverride,
+        suggestedGenres: MOOD_GENRE_MAP[moodOverride] ?? [],
+        loggedAt: new Date(),
+      };
+    }
 
     // Try the ML microservice first (TF-IDF content similarity + item-based
     // collaborative filtering, blended with mood/genre/popularity signals).
-    // If it's unreachable or errors out, fall back to the simpler in-process
+    // If it's unreachable or errors out, fall back to the in-process
     // rule-based scorer below so recommendations still work — this keeps the
-    // feature resilient to the ML service being down or mid-deploy.
+    // feature resilient to the ML service being down or mid-deploy. The
+    // fallback now also runs its own item-based collaborative filtering
+    // (see collaborativeFilteringService.js) so that signal isn't lost
+    // when the ML service is unavailable.
     try {
       const payload = _buildMLPayload(context, Math.max(ML_CANDIDATE_POOL, limit));
       const { data } = await mlClient.post('/ml/recommend', payload);
@@ -255,13 +299,49 @@ const RecommendationService = {
       return toFallbackRecommendationsDTO([], 'No movies in the database yet.');
     }
 
+    // Build the collaborative filtering model once from the platform-wide
+    // ratings (context.allRatings), then predict a score per candidate for
+    // this user. Previously this data was fetched but only ever sent to
+    // the Python ML service - the rule-based fallback ignored it entirely,
+    // so collaborative signal disappeared whenever the ML service was down.
+    //
+    // Guarded: if CollaborativeModel can't be constructed for any reason
+    // (e.g. a stale/mismatched build of collaborativeFilteringService.js
+    // still loaded from an older deploy), collaborative filtering is
+    // skipped rather than crashing the whole recommendations request —
+    // the other scoring signals (mood, genres, ratings, popularity) still
+    // work fine on their own.
+    let collabModel;
+    try {
+      collabModel = new CollaborativeModel(context.allRatings ?? []);
+    } catch (err) {
+      console.error('[RecommendationService] CollaborativeModel construction failed, skipping collaborative signal:', err.message);
+      collabModel = { predictScores: () => ({}) };
+    }
+    const knownRatings = {};
+    for (const r of context.ratings ?? []) {
+      if (r.movieId && r.rating != null) {
+        knownRatings[String(r.movieId)] = r.rating;
+      }
+    }
+    // Treat explicit likes/dislikes without a star rating as pseudo-ratings,
+    // same as the Python engine, so they still feed the collaborative model.
+    for (const mid of context.likedMovieIds ?? []) {
+      if (!(String(mid) in knownRatings)) knownRatings[String(mid)] = 9.0;
+    }
+    for (const mid of context.dislikedMovieIds ?? []) {
+      if (!(String(mid) in knownRatings)) knownRatings[String(mid)] = 2.0;
+    }
+    const candidateIds = candidates.map((m) => String(m._id ?? m.id));
+    const collabScores = collabModel.predictScores(userId, knownRatings, candidateIds);
+
     // Score every candidate once, then bucket by which signal drove the match.
     // Previously this only ever returned a single flat list, so the
     // dashboard's "Because you're feeling <mood>" and "Because you enjoyed
     // titles like these" sections always rendered empty even when a mood
     // was set — there was nothing populating those buckets.
     const scoredAll = candidates
-      .map(movie => scoreMovie(movie, context))
+      .map(movie => scoreMovie(movie, { ...context, collabScores }))
       .filter(Boolean)
       .sort((a, b) => b.score - a.score);
 
@@ -275,7 +355,7 @@ const RecommendationService = {
       : [];
 
     const historyBased = scoredAll
-      .filter(s => s.matchesLikedTaste && !personalizedIds.has(String(s.movie._id ?? s.movie.id)))
+      .filter(s => (s.matchesLikedTaste || s.matchesCollaborative) && !personalizedIds.has(String(s.movie._id ?? s.movie.id)))
       .slice(0, limit);
 
     return toBucketedRecommendationsDTO({ personalized, moodBased, historyBased });
