@@ -37,6 +37,16 @@ const MovieController = {
     }
   },
 
+  async getRelatedMovies(req, res, next) {
+    try {
+      const { limit = 12 } = req.query;
+      const result = await MovieService.getRelatedMovies(req.params.id, Number(limit));
+      res.status(200).json(apiResponse(true, 'Related movies fetched', result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async getTopRated(req, res, next) {
     try {
       const { limit = 10 } = req.query;

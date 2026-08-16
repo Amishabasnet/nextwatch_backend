@@ -52,6 +52,13 @@ const MovieService = {
     return toMovieListDTO(movies);
   },
 
+  async getRelatedMovies(id, limit = 12) {
+    const movie = await MovieRepository.findById(id);
+    if (!movie) throw new NotFoundError('Movie not found');
+    const related = await MovieRepository.findRelated(id, movie.genres || [], limit);
+    return toMovieListDTO(related);
+  },
+
   async getPersonalizedMovies(userId) {
     const prefs = await PreferenceRepository.findByUser(userId);
     if (!prefs || prefs.favoriteGenres.length === 0) {
