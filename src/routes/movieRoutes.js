@@ -12,6 +12,7 @@ router.get('/',               MovieController.getAllMovies);
 router.get('/search',         MovieController.searchMovies);
 router.get('/top-rated',      MovieController.getTopRated);
 router.get('/by-mood/:mood',  MovieController.getByMood);
+router.get('/:id/related',    MovieController.getRelatedMovies);
 router.get('/:id',            MovieController.getMovieById);
 
 // Protected

@@ -14,6 +14,22 @@ const FeatureService = {
     }));
   },
 
+  // Admin management list — includes inactive/expired/scheduled entries too.
+  async getAllFeaturesAdmin() {
+    const features = await FeatureRepository.findAll();
+    return features.map((f) => ({
+      featureId: f._id,
+      label: f.label,
+      priority: f.priority,
+      isActive: f.isActive,
+      activeFrom: f.activeFrom,
+      activeTo: f.activeTo,
+      featuredBy: f.featuredBy ? { id: f.featuredBy._id, name: f.featuredBy.name } : null,
+      movie: f.movie ? toMovieDTO(f.movie) : null,
+      createdAt: f.createdAt,
+    }));
+  },
+
   async addFeaturedMovie(userId, { movieId, label, priority, activeFrom, activeTo }) {
     const movie = await MovieRepository.findById(movieId);
     if (!movie) throw new NotFoundError('Movie not found');

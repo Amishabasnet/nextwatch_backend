@@ -11,6 +11,15 @@ const FeatureController = {
     }
   },
 
+  async getAllFeaturesAdmin(req, res, next) {
+    try {
+      const result = await FeatureService.getAllFeaturesAdmin();
+      res.status(200).json(apiResponse(true, 'All featured entries fetched', result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async addFeaturedMovie(req, res, next) {
     try {
       const result = await FeatureService.addFeaturedMovie(req.user._id, req.body);

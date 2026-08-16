@@ -1,6 +1,11 @@
 const RecommendationRepository = require('../repositories/recommendationRepository');
 const MovieRepository           = require('../repositories/movieRepository');
 const mlClient = require('../config/mlClient');
+const { CollaborativeModel: _CollaborativeModel } = require('./collaborativeFilteringService');
+
+const CollaborativeModel = typeof _CollaborativeModel === 'function'
+  ? _CollaborativeModel
+  : require('./collaborativeFilteringService');
 const { CollaborativeModel } = require('./collaborativeFilteringService');
 const {
   toRecommendationsResponseDTO,
@@ -22,12 +27,7 @@ const MOOD_GENRE_MAP = {
 };
 
 const ML_RECOMMEND_LIMIT = 20;
-// The ML service ranks by one blended hybrid score, so asking for only
-// ML_RECOMMEND_LIMIT candidates means the mood/history buckets get filtered
-// from the exact same tiny top-N list as "personalized" — since the top
-// overall movies usually satisfy several signals at once, all three
-// sections end up showing the same titles. Fetching a wider pool first
-// gives each bucket enough distinct candidates to actually differ.
+
 const ML_CANDIDATE_POOL = 50;
 
 function scoreMovie(movie, context) {
@@ -213,8 +213,20 @@ function _bucketMLRecommendations(items, limit) {
 }
 
 const RecommendationService = {
-  async getRecommendations(userId, limit = ML_RECOMMEND_LIMIT) {
+  async getRecommendations(userId, limit = ML_RECOMMEND_LIMIT, moodOverride = null) {
     const context = await RecommendationRepository.collectUserContext(userId);
+
+    // Let the caller preview recommendations for a mood other than whatever
+    // is currently saved (e.g. clicking a mood chip on the recommendations
+    // page). This doesn't touch the user's stored mood — it's a per-request
+    // override so scoring/reasons reflect that mood without persisting it.
+    if (moodOverride) {
+      context.mood = {
+        mood: moodOverride,
+        suggestedGenres: MOOD_GENRE_MAP[moodOverride] ?? [],
+        loggedAt: new Date(),
+      };
+    }
 
     // Try the ML microservice first (TF-IDF content similarity + item-based
     // collaborative filtering, blended with mood/genre/popularity signals).
@@ -280,11 +292,14 @@ const RecommendationService = {
       return toFallbackRecommendationsDTO([], 'No movies in the database yet.');
     }
 
-    // Build the collaborative filtering model once from the platform-wide
-    // ratings (context.allRatings), then predict a score per candidate for
-    // this user. Previously this data was fetched but only ever sent to
-    // the Python ML service - the rule-based fallback ignored it entirely,
-    // so collaborative signal disappeared whenever the ML service was down.
+    
+    let collabModel;
+    try {
+      collabModel = new CollaborativeModel(context.allRatings ?? []);
+    } catch (err) {
+      console.error('[RecommendationService] CollaborativeModel construction failed, skipping collaborative signal:', err.message);
+      collabModel = { predictScores: () => ({}) };
+    }
     const collabModel = new CollaborativeModel(context.allRatings ?? []);
     const knownRatings = {};
     for (const r of context.ratings ?? []) {

@@ -84,6 +84,38 @@ const MovieRepository = {
     return Movie.find({ genres: { $in: genres } }).limit(20);
   },
 
+  // Related movies for a "You Might Also Like" style rail.
+  // Ranks by number of shared genres (desc) then rating (desc), and if
+  // there aren't enough genre-matched movies, backfills with top-rated
+  // movies (excluding the source movie and anything already picked) so
+  // the rail always has a full row instead of just 1-2 items.
+  async findRelated(movieId, genres = [], limit = 12) {
+    const mongoose = require('mongoose');
+    const excludeId = new mongoose.Types.ObjectId(String(movieId));
+
+    let matched = [];
+    if (Array.isArray(genres) && genres.length > 0) {
+      matched = await Movie.aggregate([
+        { $match: { _id: { $ne: excludeId }, genres: { $in: genres } } },
+        { $addFields: { matchCount: { $size: { $setIntersection: ['$genres', genres] } } } },
+        { $sort: { matchCount: -1, averageScore: -1 } },
+        { $limit: limit },
+      ]);
+      matched = matched.map((m) => new Movie(m));
+    }
+
+    if (matched.length < limit) {
+      const excludeIds = [excludeId, ...matched.map((m) => m._id)];
+      const fillCount = limit - matched.length;
+      const filler = await Movie.find({ _id: { $nin: excludeIds } })
+        .sort({ averageScore: -1 })
+        .limit(fillCount);
+      matched = matched.concat(filler);
+    }
+
+    return matched;
+  },
+
   async findByMoods(moods) {
     return Movie.find({ moods: { $in: moods } }).limit(20);
   },

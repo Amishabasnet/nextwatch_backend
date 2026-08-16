@@ -10,6 +10,7 @@ router.get('/', FeatureController.getFeaturedMovies);
 
 // Protected: only admins can manage homepage spotlight entries
 router.use(authenticate, authorize('admin'));
+router.get('/admin/all', FeatureController.getAllFeaturesAdmin);
 router.post('/', FeatureController.addFeaturedMovie);
 router.put('/:id', FeatureController.updateFeature);
 router.delete('/:id', FeatureController.removeFeature);
