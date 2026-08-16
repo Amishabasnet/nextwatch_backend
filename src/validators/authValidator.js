@@ -1,15 +1,19 @@
 const { body } = require('express-validator');
 
 const registerValidator = [
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
+  body('name').trim().notEmpty().withMessage('Name is required')
+    .isLength({ max: 100 }).withMessage('Name must be 100 characters or fewer'),
+  body('email').trim().isEmail().withMessage('Valid email is required')
+    .isLength({ max: 254 }).withMessage('Email is too long')
+    .normalizeEmail(),
   body('phone')
-        .trim()
+    .optional({ checkFalsy: true })
+    .trim()
     .matches(/^[+]?[\d\s()-]{7,15}$/)
     .withMessage('Enter a valid phone number'),
   body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters'),
+    .isLength({ min: 6, max: 128 })
+    .withMessage('Password must be between 6 and 128 characters'),
   body('consentGiven')
     .optional()
     .isBoolean()
@@ -17,8 +21,11 @@ const registerValidator = [
 ];
 
 const loginValidator = [
-  body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
-  body('password').notEmpty().withMessage('Password is required'),
+  body('email').trim().isEmail().withMessage('Valid email is required')
+    .isLength({ max: 254 }).withMessage('Email is too long')
+    .normalizeEmail(),
+  body('password').notEmpty().withMessage('Password is required')
+    .isLength({ max: 128 }).withMessage('Password is too long'),
 ];
 
 const updateProfileValidator = [

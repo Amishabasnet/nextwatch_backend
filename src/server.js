@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { errorHandler } = require('./middleware/errorHandler');
+const { apiRateLimiter } = require('./middleware/rateLimiter');
 
 const authRoutes = require('./routes/authRoutes');
 const consentRoutes = require('./routes/consentRoutes');
@@ -29,6 +30,8 @@ app.use(cors());
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
+// Baseline rate limit across the whole API; auth routes layer on their own
+// stricter limiters (see routes/authRoutes.js + middleware/rateLimiter.js).
 app.use('/api', apiRateLimiter);
 
 app.use('/api/auth', authRoutes);
