@@ -1,7 +1,8 @@
 const User = require('../models/User');
 const { generateToken, generateRefreshToken } = require('../config/jwt');
-const { toAuthResponseDTO } = require('../dtos/auth.dto');
-const { NotFoundError, UnauthorizedError } = require('../errors/AppError');
+const { toAuthResponseDTO, toUserDTO } = require('../dtos/auth.dto');
+const { NotFoundError, UnauthorizedError, TooManyRequestsError } = require('../errors/AppError');
+const { MAX_LOGIN_ATTEMPTS } = require('../config/constants');
 
 const AuthService = {
   async register({ name, email, phone = '', password, consentGiven = false }) {
@@ -22,15 +23,40 @@ const AuthService = {
   },
 
   async login({ email, password }) {
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select('+password +failedLoginAttempts +lockUntil');
     if (!user) throw new UnauthorizedError('Invalid email or password');
 
+    // Account currently locked out — don't even check the password
+    if (user.isLocked()) {
+      const minutesLeft = Math.ceil((user.lockUntil.getTime() - Date.now()) / 60000);
+      throw new TooManyRequestsError(
+        `Account temporarily locked due to too many failed login attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`
+      );
+    }
+
     const isMatch = await user.comparePassword(password);
-    if (!isMatch) throw new UnauthorizedError('Invalid email or password');
+    if (!isMatch) {
+      await user.registerFailedLogin();
+
+      if (user.isLocked()) {
+        const minutesLeft = Math.ceil((user.lockUntil.getTime() - Date.now()) / 60000);
+        throw new TooManyRequestsError(
+          `Account locked due to too many failed login attempts. Try again in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`
+        );
+      }
+
+      const attemptsLeft = MAX_LOGIN_ATTEMPTS - user.failedLoginAttempts;
+      throw new UnauthorizedError(
+        `Invalid email or password. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining before the account is locked.`
+      );
+    }
 
     if (user.status === 'suspended') {
       throw new UnauthorizedError('This account has been suspended. Contact support for help.');
     }
+
+    // Successful login — clear any failed-attempt history
+    await user.registerSuccessfulLogin();
 
     const token        = generateToken({ id: user._id });
     const refreshToken = generateRefreshToken({ id: user._id });
@@ -92,13 +118,13 @@ const AuthService = {
   async getProfile(userId) {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError('User not found');
-    return user;
+    return toUserDTO(user);
   },
 
   async updateProfile(userId, data) {
     const user = await User.findByIdAndUpdate(userId, data, { new: true, runValidators: true });
     if (!user) throw new NotFoundError('User not found');
-    return user;
+    return toUserDTO(user);
   },
 
   async changePassword(userId, { currentPassword, newPassword }) {
