@@ -68,6 +68,26 @@ const AuthController = {
       next(error);
     }
   },
+
+  async forgotPassword(req, res, next) {
+    try {
+      const { email } = req.body;
+      const result = await AuthService.forgotPassword(email);
+      res.status(200).json(apiResponse(true, result.message, result));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async resetPassword(req, res, next) {
+    try {
+      const { token, password } = req.body;
+      const result = await AuthService.resetPassword(token, password);
+      res.status(200).json(apiResponse(true, result.message, result));
+    } catch (error) {
+      next(error);
+    }
+  },
 };
 
 module.exports = AuthController;

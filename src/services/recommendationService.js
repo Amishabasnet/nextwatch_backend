@@ -2,13 +2,11 @@ const RecommendationRepository = require('../repositories/recommendationReposito
 const MovieRepository           = require('../repositories/movieRepository');
 const mlClient = require('../config/mlClient');
 const { CollaborativeModel: _CollaborativeModel } = require('./collaborativeFilteringService');
-// Defensive: support both `module.exports = { CollaborativeModel }` (current)
-// and a stray `module.exports = CollaborativeModel` from an older build, so
-// a mismatched file on disk degrades gracefully instead of throwing
-// "CollaborativeModel is not a constructor" deep inside a request.
+
 const CollaborativeModel = typeof _CollaborativeModel === 'function'
   ? _CollaborativeModel
   : require('./collaborativeFilteringService');
+const { CollaborativeModel } = require('./collaborativeFilteringService');
 const {
   toRecommendationsResponseDTO,
   toFallbackRecommendationsDTO,
@@ -29,12 +27,7 @@ const MOOD_GENRE_MAP = {
 };
 
 const ML_RECOMMEND_LIMIT = 20;
-// The ML service ranks by one blended hybrid score, so asking for only
-// ML_RECOMMEND_LIMIT candidates means the mood/history buckets get filtered
-// from the exact same tiny top-N list as "personalized" — since the top
-// overall movies usually satisfy several signals at once, all three
-// sections end up showing the same titles. Fetching a wider pool first
-// gives each bucket enough distinct candidates to actually differ.
+
 const ML_CANDIDATE_POOL = 50;
 
 function scoreMovie(movie, context) {
@@ -299,18 +292,7 @@ const RecommendationService = {
       return toFallbackRecommendationsDTO([], 'No movies in the database yet.');
     }
 
-    // Build the collaborative filtering model once from the platform-wide
-    // ratings (context.allRatings), then predict a score per candidate for
-    // this user. Previously this data was fetched but only ever sent to
-    // the Python ML service - the rule-based fallback ignored it entirely,
-    // so collaborative signal disappeared whenever the ML service was down.
-    //
-    // Guarded: if CollaborativeModel can't be constructed for any reason
-    // (e.g. a stale/mismatched build of collaborativeFilteringService.js
-    // still loaded from an older deploy), collaborative filtering is
-    // skipped rather than crashing the whole recommendations request —
-    // the other scoring signals (mood, genres, ratings, popularity) still
-    // work fine on their own.
+    
     let collabModel;
     try {
       collabModel = new CollaborativeModel(context.allRatings ?? []);
@@ -318,6 +300,7 @@ const RecommendationService = {
       console.error('[RecommendationService] CollaborativeModel construction failed, skipping collaborative signal:', err.message);
       collabModel = { predictScores: () => ({}) };
     }
+    const collabModel = new CollaborativeModel(context.allRatings ?? []);
     const knownRatings = {};
     for (const r of context.ratings ?? []) {
       if (r.movieId && r.rating != null) {

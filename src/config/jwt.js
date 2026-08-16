@@ -11,6 +11,20 @@ const generateToken = (payload) =>
 const generateRefreshToken = (payload) =>
   jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES });
 
+// password reset token are short lived
+const RESET_TOKEN_EXPIRES = process.env.RESET_TOKEN_EXPIRES || '15m';
+
+const generateResetToken = ({ id, pwdSig }) =>
+  jwt.sign({ id, pwdSig, purpose: 'password_reset' }, JWT_SECRET, { expiresIn: RESET_TOKEN_EXPIRES });
+
+const verifyResetToken = (token) => {
+  const payload = jwt.verify(token, JWT_SECRET);
+  if (payload.purpose !== 'password_reset') {
+    throw new Error('Invalid token purpose');
+  }
+  return payload;
+};
+
 const verifyToken = (token) =>
   jwt.verify(token, JWT_SECRET);
 
@@ -20,6 +34,8 @@ const verifyRefreshToken = (token) =>
 module.exports = {
   generateToken,
   generateRefreshToken,
+  generateResetToken,
+  verifyResetToken,
   verifyToken,
   verifyRefreshToken,
   JWT_REFRESH_EXPIRES,
