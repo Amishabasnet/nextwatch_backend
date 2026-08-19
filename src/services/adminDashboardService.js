@@ -10,6 +10,10 @@ const AdminDashboardService = {
       mostSelectedMood,
       mostWatchedGenre,
       mostRecommendedMovies,
+      recommendationActivityTrend,
+      moodGenreBehaviour,
+      topRecommendedMovies,
+      recentUserActivity,
     ] = await Promise.all([
       AdminDashboardRepository.countUsers(),
       AdminDashboardRepository.countMovies(),
@@ -17,6 +21,10 @@ const AdminDashboardService = {
       AdminDashboardRepository.getMostSelectedMood(),
       AdminDashboardRepository.getMostWatchedGenre(),
       AdminDashboardRepository.getMostRecommendedMovies(),
+      AdminDashboardRepository.getRecommendationActivityTrend(),
+      AdminDashboardRepository.getMoodGenreBehaviour(),
+      AdminDashboardRepository.getTopRecommendedMovies(),
+      AdminDashboardRepository.getRecentUserActivity(),
     ]);
 
     const userEngagement = await AdminDashboardRepository.getUserEngagementSummary(totalUsers);
@@ -29,6 +37,10 @@ const AdminDashboardService = {
       mostWatchedGenre,
       mostRecommendedMovies,
       userEngagement,
+      recommendationActivityTrend,
+      moodGenreBehaviour,
+      topRecommendedMovies,
+      recentUserActivity,
     });
   },
 };

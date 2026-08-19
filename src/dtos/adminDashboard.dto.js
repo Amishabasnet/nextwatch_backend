@@ -8,6 +8,10 @@ const toAdminDashboardDTO = (raw) => ({
   mostWatchedGenre: raw.mostWatchedGenre,
   mostRecommendedMovies: raw.mostRecommendedMovies,
   userEngagement: raw.userEngagement,
+  recommendationActivityTrend: raw.recommendationActivityTrend,
+  moodGenreBehaviour: raw.moodGenreBehaviour,
+  topRecommendedMovies: raw.topRecommendedMovies,
+  recentUserActivity: raw.recentUserActivity,
   generatedAt: new Date().toISOString(),
 });
 

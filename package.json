@@ -6,8 +6,9 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "seed": "node src/seeds/seedMovies.js",
+    "seed:feedback": "node src/seeds/seedRecommendationFeedback.js",
     "make-admin": "node src/seeds/makeAdmin.js"
   },
   "keywords": [],

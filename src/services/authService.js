@@ -1,11 +1,8 @@
 const User = require('../models/User');
-const { generateToken, generateRefreshToken } = require('../config/jwt');
+const { generateToken, generateRefreshToken, verifyRefreshToken, generateResetToken, verifyResetToken } = require('../config/jwt');
 const { toAuthResponseDTO, toUserDTO } = require('../dtos/auth.dto');
-const { NotFoundError, UnauthorizedError, TooManyRequestsError } = require('../errors/AppError');
+const { NotFoundError, UnauthorizedError, TooManyRequestsError } = require('../errors/appError');
 const { MAX_LOGIN_ATTEMPTS } = require('../config/constants');
-const { generateToken, generateRefreshToken, generateResetToken, verifyResetToken } = require('../config/jwt');
-const { toAuthResponseDTO } = require('../dtos/auth.dto');
-const { NotFoundError, UnauthorizedError } = require('../errors/appError');
 const EmailService = require('./emailService');
 
 const AuthService = {
@@ -82,7 +79,6 @@ const AuthService = {
     // Verify signature & expiry
     let payload;
     try {
-      const { verifyRefreshToken } = require('../config/jwt');
       payload = verifyRefreshToken(incomingRefreshToken);
     } catch {
       throw new UnauthorizedError('Invalid or expired refresh token');

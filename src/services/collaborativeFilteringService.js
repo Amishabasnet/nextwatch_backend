@@ -1,73 +1,4 @@
-
 'use strict';
-
-const MIN_OVERLAP_USERS = 2;
-
-class CollaborativeModel {
-  /**
-   * @param {Array<{userId: string, movieId: string, rating: number}>} allRatings
-   */
-  constructor(allRatings = []) {
-    this.itemSimilarity = null; // Map<movieId, Map<movieId, similarity>>
-    this.userMeans = null; // Map<userId, meanRating>
-    this.usable = false;
-
-    if (!Array.isArray(allRatings) || allRatings.length < 2) return;
-
-    // Deduplicate (userId, movieId) pairs, keeping the last occurrence -
-    // mirrors df.drop_duplicates(..., keep="last") in the Python version.
-    const dedup = new Map();
-    for (const r of allRatings) {
-      if (!r || r.userId == null || r.movieId == null || r.rating == null) continue;
-      const uid = String(r.userId);
-      const mid = String(r.movieId);
-      const rating = Number(r.rating);
-      if (Number.isNaN(rating)) continue;
-      dedup.set(`${uid}::${mid}`, { userId: uid, movieId: mid, rating });
-    }
-
-    // user -> Map(movieId -> rating)
-    const matrix = new Map();
-    const movieSet = new Set();
-    for (const { userId, movieId, rating } of dedup.values()) {
-      if (!matrix.has(userId)) matrix.set(userId, new Map());
-      matrix.get(userId).set(movieId, rating);
-      movieSet.add(movieId);
-    }
-
-    const userIds = [...matrix.keys()];
-    const movieIds = [...movieSet];
-    if (userIds.length < 2 || movieIds.length < 2) return; // not enough data
-
-    // Per-user mean rating
-    const userMeans = new Map();
-    for (const uid of userIds) {
-      const vals = [...matrix.get(uid).values()];
-      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
-      userMeans.set(uid, mean);
-    }
-
-    // Mean-centered rating per movie, keyed by user: Map<movieId, Map<userId, centered>>
-    const movieUserCentered = new Map();
-    for (const mid of movieIds) movieUserCentered.set(mid, new Map());
-    for (const uid of userIds) {
-      const mean = userMeans.get(uid);
-      for (const [mid, rating] of matrix.get(uid).entries()) {
-        movieUserCentered.get(mid).set(uid, rating - mean);
-      }
-    }
-
-    // Precompute each movie's vector norm (over the users who rated it -
-    // equivalent to computing the norm on the zero-filled full vector,
-    // since non-raters contribute 0).
-    const movieNorm = new Map();
-    for (const mid of movieIds) {
-      const centeredVals = [...movieUserCentered.get(mid).values()];
-      const sumSq = centeredVals.reduce((a, v) => a + v * v, 0);
-      movieNorm.set(mid, Math.sqrt(sumSq));
-    }
-
-    // Item-item cosine similarity, gated by shared-rater overlap.
 
 const MIN_OVERLAP_USERS = 2;
 
@@ -151,38 +82,9 @@ class CollaborativeModel {
     for (const mid of movieIds) itemSimilarity.set(mid, new Map());
 
     for (let i = 0; i < movieIds.length; i++) {
-      const a = movieIds[i];
-      itemSimilarity.get(a).set(a, 1.0); // diagonal, matches np.fill_diagonal(..., 1.0)
-
-      const ratersA = movieUserCentered.get(a);
-      const normA = movieNorm.get(a);
-
-      for (let j = i + 1; j < movieIds.length; j++) {
-        const b = movieIds[j];
-        const ratersB = movieUserCentered.get(b);
-        const normB = movieNorm.get(b);
-
-        // Iterate the smaller side for the overlap/dot-product computation.
-        const [small, large] = ratersA.size <= ratersB.size ? [ratersA, ratersB] : [ratersB, ratersA];
-
-        let overlap = 0;
-        let dot = 0;
-        for (const [uid, val] of small.entries()) {
-          if (large.has(uid)) {
-            overlap += 1;
-            dot += val * large.get(uid);
-          }
-        }
-
-        let sim = 0;
-        if (overlap >= MIN_OVERLAP_USERS && normA > 0 && normB > 0) {
-          sim = dot / (normA * normB);
-        }
-
-        itemSimilarity.get(a).set(b, sim);
-        itemSimilarity.get(b).set(a, sim);
       const midA = movieIds[i];
-      itemSimilarity.get(midA).set(midA, 1.0);
+      itemSimilarity.get(midA).set(midA, 1.0); // diagonal
+
       for (let j = i + 1; j < movieIds.length; j++) {
         const midB = movieIds[j];
 
@@ -202,25 +104,6 @@ class CollaborativeModel {
     }
 
     this.itemSimilarity = itemSimilarity;
-    this.userMeans = userMeans;
-    this.usable = true;
-  }
-
-  get isUsable() {
-    return this.usable;
-  }
-
-  /**
-   * @param {string} userId
-   * @param {Object<string, number>} knownRatings movieId -> rating (1-10)
-   * @param {string[]} candidateMovieIds
-   * @returns {Object<string, number>} movieId -> score (0-1). Movies with
-   *   no signal are omitted; caller should treat missing as 0.
-   */
-  predictScores(userId, knownRatings, candidateMovieIds) {
-    if (!this.usable || !knownRatings || Object.keys(knownRatings).length === 0) {
-      return {};
-    }
     this.isUsable = true;
   }
 
@@ -247,17 +130,6 @@ class CollaborativeModel {
     const results = {};
     for (const movieId of candidateMovieIds) {
       const mid = String(movieId);
-      const simRow = this.itemSimilarity.get(mid);
-      if (!simRow) continue;
-
-      let numer = 0;
-      let denom = 0;
-      for (const ratedId of ratedIds) {
-        const sim = simRow.get(ratedId) ?? 0;
-        const weight = Math.abs(sim);
-        if (weight === 0) continue;
-        denom += weight;
-        numer += sim * (knownRatings[ratedId] - userMean);
       if (!this.itemSimilarity.has(mid)) continue;
 
       const simsForMovie = this.itemSimilarity.get(mid);
@@ -279,5 +151,4 @@ class CollaborativeModel {
   }
 }
 
-module.exports = { CollaborativeModel };
 module.exports = { CollaborativeModel, MIN_OVERLAP_USERS };
