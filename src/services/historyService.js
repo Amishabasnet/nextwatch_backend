@@ -1,7 +1,7 @@
 const HistoryRepository = require('../repositories/historyRepository');
 const MovieRepository = require('../repositories/movieRepository');
 const { toHistoryDTO, toHistoryListDTO } = require('../dtos/history.dto');
-const { NotFoundError, ConflictError } = require('../errors/AppError');
+const { NotFoundError, ConflictError } = require('../errors/appError');
 const { paginationMeta } = require('../types/express.types');
 
 const HistoryService = {

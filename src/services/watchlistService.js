@@ -1,7 +1,7 @@
 const WatchlistRepository = require('../repositories/watchlistRepository');
 const MovieRepository = require('../repositories/movieRepository');
 const { toWatchlistEntryDTO, toWatchlistListDTO } = require('../dtos/watchlist.dto');
-const { NotFoundError, ConflictError } = require('../errors/AppError');
+const { NotFoundError, ConflictError } = require('../errors/appError');
 const { paginationMeta } = require('../types/express.types');
 
 const WatchlistService = {

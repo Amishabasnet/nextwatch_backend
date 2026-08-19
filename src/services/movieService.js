@@ -1,7 +1,7 @@
 const MovieRepository = require('../repositories/movieRepository');
 const PreferenceRepository = require('../repositories/preferenceRepository');
 const { toMovieDTO, toMovieListDTO } = require('../dtos/movie.dto');
-const { NotFoundError } = require('../errors/AppError');
+const { NotFoundError } = require('../errors/appError');
 const { paginationMeta } = require('../types/express.types');
 
 const MovieService = {

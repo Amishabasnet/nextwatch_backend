@@ -1,5 +1,5 @@
 const { verifyToken } = require('../config/jwt');
-const { UnauthorizedError } = require('../errors/AppError');
+const { UnauthorizedError } = require('../errors/appError');
 const UserRepository = require('../repositories/userRepository');
 
 const authenticate = async (req, res, next) => {

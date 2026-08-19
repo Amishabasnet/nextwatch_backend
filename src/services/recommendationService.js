@@ -2,11 +2,13 @@ const RecommendationRepository = require('../repositories/recommendationReposito
 const MovieRepository           = require('../repositories/movieRepository');
 const mlClient = require('../config/mlClient');
 const { CollaborativeModel: _CollaborativeModel } = require('./collaborativeFilteringService');
-
+// Defensive: support both `module.exports = { CollaborativeModel }` (current)
+// and a stray `module.exports = CollaborativeModel` from an older build, so
+// a mismatched file on disk degrades gracefully instead of throwing
+// "CollaborativeModel is not a constructor" deep inside a request.
 const CollaborativeModel = typeof _CollaborativeModel === 'function'
   ? _CollaborativeModel
   : require('./collaborativeFilteringService');
-const { CollaborativeModel } = require('./collaborativeFilteringService');
 const {
   toRecommendationsResponseDTO,
   toFallbackRecommendationsDTO,
@@ -292,7 +294,6 @@ const RecommendationService = {
       return toFallbackRecommendationsDTO([], 'No movies in the database yet.');
     }
 
-    
     let collabModel;
     try {
       collabModel = new CollaborativeModel(context.allRatings ?? []);
@@ -300,7 +301,6 @@ const RecommendationService = {
       console.error('[RecommendationService] CollaborativeModel construction failed, skipping collaborative signal:', err.message);
       collabModel = { predictScores: () => ({}) };
     }
-    const collabModel = new CollaborativeModel(context.allRatings ?? []);
     const knownRatings = {};
     for (const r of context.ratings ?? []) {
       if (r.movieId && r.rating != null) {
