@@ -1,4 +1,4 @@
-const { ForbiddenError } = require('../errors/AppError');
+const { ForbiddenError } = require('../errors/appError');
 
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {

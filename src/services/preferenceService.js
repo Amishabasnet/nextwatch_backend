@@ -1,5 +1,5 @@
 const PreferenceRepository = require('../repositories/preferenceRepository');
-const { NotFoundError } = require('../errors/AppError');
+const { NotFoundError } = require('../errors/appError');
 
 const PreferenceService = {
   async getPreferences(userId) {

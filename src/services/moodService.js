@@ -1,6 +1,6 @@
 const MoodRepository = require('../repositories/moodRepository');
 const MovieRepository = require('../repositories/movieRepository');
-const { NotFoundError } = require('../errors/AppError');
+const { NotFoundError } = require('../errors/appError');
 
 // Maps each mood to suggested genres for movie recommendations
 const MOOD_GENRE_MAP = {

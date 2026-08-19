@@ -1,7 +1,7 @@
 const RatingRepository = require('../repositories/ratingRepository');
 const MovieRepository = require('../repositories/movieRepository');
 const { toRatingDTO, toRatingListDTO, toMovieRatingsSummaryDTO } = require('../dtos/rating.dto');
-const { NotFoundError, ConflictError, ForbiddenError } = require('../errors/AppError');
+const { NotFoundError, ConflictError, ForbiddenError } = require('../errors/appError');
 
 const RatingService = {
   async createRating(userId, { movieId, rating, liked, disliked, feedbackText }) {

@@ -1,7 +1,7 @@
 const FeatureRepository = require('../repositories/featureRepository');
 const MovieRepository = require('../repositories/movieRepository');
 const { toMovieDTO } = require('../dtos/movie.dto');
-const { NotFoundError } = require('../errors/AppError');
+const { NotFoundError } = require('../errors/appError');
 
 const FeatureService = {
   async getFeaturedMovies() {

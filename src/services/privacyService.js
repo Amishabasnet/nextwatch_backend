@@ -3,7 +3,7 @@ const HistoryRepository = require('../repositories/historyRepository');
 const Rating = require('../models/Rating');
 const Preference = require('../models/Preference');
 const RecommendationFeedback = require('../models/RecommendationFeedback');
-const { NotFoundError, UnauthorizedError, ValidationError } = require('../errors/AppError');
+const { NotFoundError, UnauthorizedError, ValidationError } = require('../errors/appError');
 
 const PrivacyService = {
   async deleteAccount(userId, password) {

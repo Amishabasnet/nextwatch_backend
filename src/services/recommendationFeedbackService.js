@@ -1,6 +1,6 @@
 const RecommendationFeedbackRepository = require('../repositories/recommendationFeedbackRepository');
 const MovieRepository = require('../repositories/movieRepository');
-const { NotFoundError } = require('../errors/AppError');
+const { NotFoundError } = require('../errors/appError');
 
 const RecommendationFeedbackService = {
   async submitFeedback(userId, { movieId, clicked, liked, disliked, markedIrrelevant, irrelevantReason }) {

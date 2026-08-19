@@ -1,4 +1,4 @@
-const { ForbiddenError } = require('../errors/AppError');
+const { ForbiddenError } = require('../errors/appError');
 const authorizeSelf = (paramName = 'userId') => {
   return (req, res, next) => {
     if (!req.user) {

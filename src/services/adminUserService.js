@@ -7,7 +7,7 @@ const Watchlist = require('../models/Watchlist');
 const Mood = require('../models/Mood');
 const { toAdminUserDTO, toAdminUserListDTO } = require('../dtos/adminUser.dto');
 const { paginationMeta } = require('../types/express.types');
-const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../errors/AppError');
+const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../errors/appError');
 
 const AdminUserService = {
   // Lets an existing admin create a brand-new user who is already an admin,
